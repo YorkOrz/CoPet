@@ -4,6 +4,7 @@ version = "0.1.11"
 description = "Local desktop pet companion for Agent CLI workflows"
 authors = ["CoPet contributors"]
 edition = "2021"
+default-run = "CoPet"
 
 [lib]
 name = "copet_lib"
@@ -15,6 +16,10 @@ path = "src/lib.rs"
 # in dev as it already does in the bundled .app via CFBundleName.
 name = "CoPet"
 path = "src/main.rs"
+
+[[bin]]
+name = "copet-hook"
+path = "src/bin/copet_hook.rs"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }

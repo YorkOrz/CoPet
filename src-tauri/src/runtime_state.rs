@@ -220,7 +220,7 @@ pub fn agent_display_name(agent: &str) -> &str {
 
 fn is_test_command(tool_input: Option<&Value>) -> bool {
     let Some(command) = tool_input
-        .and_then(|input| input.get("command"))
+        .and_then(|input| input.get("command").or_else(|| input.get("cmd")))
         .and_then(Value::as_str)
     else {
         return false;
@@ -257,6 +257,14 @@ fn map_event_to_state(event: &RuntimeEvent) -> Option<PetStateId> {
         {
             Some(PetStateId::Review)
         }
+        "tool.before"
+            if matches!(
+                event.tool.as_deref().map(|s| s.to_ascii_lowercase()).as_deref(),
+                Some("ask_question" | "askquestion" | "question" | "request_user_input")
+            ) =>
+        {
+            Some(PetStateId::Waiting)
+        }
         "tool.before" => Some(PetStateId::Running),
         "tool.after" => Some(PetStateId::Idle),
         "permission.waiting" | "session.waiting" => Some(PetStateId::Waiting),
@@ -274,6 +282,8 @@ fn is_review_tool(tool: Option<&str>) -> bool {
             if matches!(
                 tool.as_str(),
                 "read" | "grep" | "glob" | "ls" | "find" | "search" | "websearch"
+                    | "view_file" | "search_web" | "read_url_content"
+                    | "list_resources" | "read_resource" | "view_image" | "list_mcp_resources" | "list_mcp_resource_templates" | "read_mcp_resource"
             )
     )
 }

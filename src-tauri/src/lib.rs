@@ -870,13 +870,20 @@ fn install_tray_menu(app: &mut tauri::App, locale: Locale) -> tauri::Result<()> 
         ],
     )?;
 
+    #[cfg(target_os = "windows")]
+    let tray_icon = tauri::image::Image::from_bytes(include_bytes!("../icons/32x32.png"))?;
+    #[cfg(not(target_os = "windows"))]
     let tray_icon = tauri::image::Image::from_bytes(include_bytes!("../icons/tray.png"))?;
-    let tray = TrayIconBuilder::with_id("copet")
+    let mut tray_builder = TrayIconBuilder::with_id("copet")
         .tooltip("CoPet")
         .icon(tray_icon)
-        .icon_as_template(true)
         .menu(&menu)
-        .show_menu_on_left_click(true)
+        .show_menu_on_left_click(true);
+    #[cfg(target_os = "macos")]
+    {
+        tray_builder = tray_builder.icon_as_template(true);
+    }
+    let tray = tray_builder
         .on_menu_event(|app, event| match event.id().as_ref() {
             TRAY_MENU_BRAND_HEADER_ID => { /* disabled, never fires */ }
             TRAY_MENU_VISIBILITY_ID => {

@@ -165,9 +165,40 @@ pub struct PetPackage {
     pub sounds: Option<PetSounds>,
 }
 
+pub fn detect_sprite_grid_rows(path: &Path) -> u32 {
+    if let Ok(mut file) = fs::File::open(path) {
+        use std::io::Read;
+        let mut header = [0u8; 32];
+        if file.read_exact(&mut header).is_ok() {
+            // WebP VP8L lossless
+            if &header[0..4] == b"RIFF" && &header[8..16] == b"WEBPVP8L" && header[20] == 0x2f {
+                let val = u32::from_le_bytes([header[21], header[22], header[23], header[24]]);
+                let h = ((val >> 14) & 0x3FFF) + 1;
+                if h >= 2200 {
+                    return SPRITE_V2_GRID_ROWS;
+                }
+            }
+            // PNG
+            if &header[0..8] == b"\x89PNG\r\n\x1a\n" {
+                let h = u32::from_be_bytes([header[20], header[21], header[22], header[23]]);
+                if h >= 2200 {
+                    return SPRITE_V2_GRID_ROWS;
+                }
+            }
+        }
+    }
+    DEFAULT_GRID_ROWS
+}
+
 impl PetPackage {
     pub fn summary(self, namespace: PetNamespace, storage_id: &str) -> PetSummary {
-        let grid_rows = self.manifest.resolved_grid_rows();
+        let grid_rows = self.manifest.grid_rows.unwrap_or_else(|| {
+            if self.manifest.sprite_version_number == Some(2) {
+                SPRITE_V2_GRID_ROWS
+            } else {
+                detect_sprite_grid_rows(&self.sprite_path)
+            }
+        });
         let slug = if self.manifest.slug.is_empty() {
             storage_id.to_string()
         } else {

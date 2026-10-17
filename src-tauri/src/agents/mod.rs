@@ -9,6 +9,9 @@ use std::{
 };
 
 pub(crate) const COPET_MARKER: &str = "copet-managed-hook";
+#[cfg(windows)]
+pub(crate) const HELPER_NAME: &str = "copet-hook.exe";
+#[cfg(not(windows))]
 pub(crate) const HELPER_NAME: &str = "copet-hook.sh";
 
 static ADAPTERS: [&dyn CliAdapter; 8] = [
@@ -299,13 +302,27 @@ impl AgentManager {
     pub(crate) fn ensure_helper(&self) -> Result<(), AdapterError> {
         let path = self.helper_path();
         ensure_parent(&path)?;
-        write_atomic(&path, helper_script().as_bytes())?;
-        #[cfg(unix)]
+        #[cfg(windows)]
         {
-            use std::os::unix::fs::PermissionsExt;
-            let mut permissions = fs::metadata(&path)?.permissions();
-            permissions.set_mode(0o755);
-            fs::set_permissions(&path, permissions)?;
+            if let Ok(exe_path) = env::current_exe() {
+                if let Some(exe_dir) = exe_path.parent() {
+                    let candidate = exe_dir.join(HELPER_NAME);
+                    if candidate.is_file() {
+                        let _ = fs::copy(&candidate, &path);
+                    }
+                }
+            }
+        }
+        #[cfg(not(windows))]
+        {
+            write_atomic(&path, helper_script().as_bytes())?;
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let mut permissions = fs::metadata(&path)?.permissions();
+                permissions.set_mode(0o755);
+                fs::set_permissions(&path, permissions)?;
+            }
         }
         Ok(())
     }
@@ -457,8 +474,7 @@ fn hook_group_matches_event(group: &Value, adapter_id: &str, event: &HookEvent) 
                     .get("command")
                     .and_then(Value::as_str)
                     .is_some_and(|command| {
-                        is_copet_command(command, adapter_id)
-                            && command.contains(&format!(" {}", event.kind))
+                        command.contains(HELPER_NAME) && command.contains(&format!(" {adapter_id} {}", event.kind))
                     })
             })
         })
@@ -473,7 +489,7 @@ fn hook_group_has_copet_command(group: &Value, adapter_id: &str) -> bool {
                 handler
                     .get("command")
                     .and_then(Value::as_str)
-                    .is_some_and(|command| is_copet_command(command, adapter_id))
+                    .is_some_and(|command| command.contains(HELPER_NAME) && command.contains(&format!(" {adapter_id} ")))
             })
         })
 }
@@ -544,19 +560,32 @@ fn remove_copet_hooks(value: &mut Value, adapter_id: &str) {
 }
 
 fn is_copet_command(command: &str, adapter_id: &str) -> bool {
-    command.contains(HELPER_NAME) && command.contains(&format!(" {adapter_id} "))
+    (command.contains(HELPER_NAME) || command.contains("copet-hook"))
+        && command.contains(&format!(" {adapter_id} "))
 }
 
 fn hook_command(adapter_id: &str, helper_path: &Path, kind: &str) -> String {
-    let path = shell_quote(&helper_path.to_string_lossy());
-    let fallback_output = hook_default_output(adapter_id, kind);
-    if fallback_output == "{}" {
-        format!("if [ -f {path} ]; then {path} {adapter_id} {kind}; else echo \"{{}}\"; fi")
-    } else {
-        let fallback = shell_quote(fallback_output);
-        format!(
-            "if [ -f {path} ]; then {path} {adapter_id} {kind}; else printf '%s\\n' {fallback}; fi"
-        )
+    #[cfg(windows)]
+    {
+		let path = helper_path.to_string_lossy();
+		if path.contains(' ') {
+			format!("\"{path}\" {adapter_id} {kind}")
+		} else {
+			format!("{path} {adapter_id} {kind}")
+		}
+    }
+    #[cfg(not(windows))]
+    {
+        let path = shell_quote(&helper_path.to_string_lossy());
+        let fallback_output = hook_default_output(adapter_id, kind);
+        if fallback_output == "{}" {
+            format!("if [ -f {path} ]; then {path} {adapter_id} {kind}; else echo \"{{}}\"; fi")
+        } else {
+            let fallback = shell_quote(fallback_output);
+            format!(
+                "if [ -f {path} ]; then {path} {adapter_id} {kind}; else printf '%s\\n' {fallback}; fi"
+            )
+        }
     }
 }
 

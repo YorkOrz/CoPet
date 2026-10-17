@@ -4,7 +4,7 @@ use serde_json::{json, Value};
 
 use super::super::{
     hook_command, read_json_object_optional, read_json_object_required, write_json_atomic,
-    AdapterError, AgentManager, CliAdapter, HELPER_NAME,
+    AdapterError, AgentManager, CliAdapter,
 };
 
 pub(super) static ADAPTER: AntigravityAdapter = AntigravityAdapter;
@@ -174,30 +174,10 @@ fn handlers_have_copet_kind(handlers: &[Value], adapter_id: &str, kind: &str) ->
 }
 
 fn is_antigravity_copet_command(command: &str, adapter_id: &str, kind: &str) -> bool {
-    command.split(';').any(|segment| {
-        segment
-            .trim()
-            .strip_prefix("then ")
-            .is_some_and(|invocation| invocation_matches_copet_helper(invocation, adapter_id, kind))
-    })
-}
-
-fn invocation_matches_copet_helper(invocation: &str, adapter_id: &str, kind: &str) -> bool {
-    let Some(rest) = invocation.strip_prefix('\'') else {
-        return false;
-    };
-    let Some(end_quote) = rest.find('\'') else {
-        return false;
-    };
-
-    let helper_path = &rest[..end_quote];
-    let helper_file_name = Path::new(helper_path)
-        .file_name()
-        .and_then(|name| name.to_str());
-    if helper_file_name != Some(HELPER_NAME) {
+    let target = format!("{adapter_id} {kind}");
+    if !command.contains(&target) {
         return false;
     }
-
-    let args = rest[end_quote + 1..].trim();
-    args == format!("{adapter_id} {kind}")
+    command.contains("copet-hook")
 }
+
