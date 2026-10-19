@@ -30,7 +30,15 @@ pub fn manager_with_fake_agents(
         root,
         home,
         &[
-            "claude", "codex", "agy", "gemini", "opencode", "copilot", "cursor", "pi",
+            "claude",
+            "codex",
+            "agy",
+            "gemini",
+            "opencode",
+            "copilot",
+            "cursor",
+            "pi",
+            "workbuddy",
         ],
     )
 }

@@ -286,6 +286,15 @@ export const piAdapter: AdapterSummary = {
   message: "Configuration path not created yet",
 };
 
+export const workbuddyAdapter: AdapterSummary = {
+  id: "workbuddy",
+  displayName: "WorkBuddy",
+  configPath: "/home/.workbuddy/settings.json",
+  installed: false,
+  healthy: false,
+  message: "Configuration path not created yet",
+};
+
 export async function createAppHarness(browser: Browser, options: AppHarnessOptions = {}) {
   const context = await browser.newContext({
     reducedMotion: options.reducedMotion ?? "reduce",

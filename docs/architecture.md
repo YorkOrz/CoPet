@@ -46,7 +46,7 @@ Each supported Agent is implemented as an adapter. The adapter knows where that 
 
 The shared manager handles the engineering policy around adapters: safe backups, atomic writes where possible, executable detection, repair as reinstall, and one-time auto-install on first launch. Adding a new Agent should mean adding one adapter and tests, not changing the pet renderer or settings architecture.
 
-Current adapters cover Claude Code, Codex, Antigravity, OpenCode, Cursor, Copilot CLI, Pi, and Gemini.
+Current adapters cover Claude Code, Codex, Antigravity, OpenCode, Cursor, Copilot CLI, Pi, Gemini, and WorkBuddy.
 
 ## Resource Packages
 

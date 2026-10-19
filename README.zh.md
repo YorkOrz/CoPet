@@ -2,7 +2,7 @@
   <img src="./public/pet.png" alt="CoPet logo" width="120" />
   <h1>CoPet</h1>
   <p><strong>给 AI Agent 会话配一只会动的桌面宠物。</strong></p>
-  <p>CoPet 使用兼容 Codex 的宠物包，实时感知 Claude Code、Codex、Antigravity、OpenCode、Cursor、Copilot CLI、Pi 和 Gemini 的提示、工具调用、等待、完成与错误状态，让宠物在桌面上跟着工作节奏做出反应。</p>
+  <p>CoPet 使用兼容 Codex 的宠物包，实时感知 Claude Code、Codex、Antigravity、OpenCode、Cursor、Copilot CLI、Pi、Gemini 和 WorkBuddy 的提示、工具调用、等待、完成与错误状态，让宠物在桌面上跟着工作节奏做出反应。</p>
 </div>
 
 ![CoPet](./public/banner.zh.png)
@@ -47,7 +47,7 @@
 ## 主要功能
 
 - 宠物会实时响应 Agent 的提示、工具调用、等待、完成和错误状态。
-- 支持 Claude Code、Codex、Antigravity、OpenCode、Cursor、Copilot CLI、Pi 和 Gemini。
+- 支持 Claude Code、Codex、Antigravity、OpenCode、Cursor、Copilot CLI、Pi、Gemini 和 WorkBuddy。
 - 自带多款宠物，也可以导入兼容 Codex 的宠物包。
 - 互动丰富：悬停、单击、双击、快速连击抚摸、长按、拖拽反应，以及原生右键菜单。
 - 支持全局音效包，也支持宠物自带的交互音效和 Agent 状态音效。
@@ -113,6 +113,9 @@ $skill-installer install all CoPet skills from https://github.com/ChanceYu/CoPet
 | Copilot CLI | JSON hook 文件 | `~/.copilot/hooks/copet.json` |
 | Pi | TypeScript 扩展 | `~/.pi/agent/extensions/copet/index.ts` |
 | Gemini | JSON hooks | `~/.gemini/settings.json` |
+| WorkBuddy | JSON hooks | `~/.workbuddy/settings.json` |
+
+WorkBuddy 在会话启动时快照 hook 配置，开关集成后需要重启 WorkBuddy；如果它提示确认新增 hook，放行 CoPet 的条目即可。
 
 ## 快速开始
 

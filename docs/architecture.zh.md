@@ -46,7 +46,7 @@ Rust Core 负责状态派生。它把事件映射成 thinking、editing、inspec
 
 共享 manager 负责 adapter 周围的工程策略：安全备份、尽可能原子写入、可执行文件检测、repair 即重新安装、首次启动时一次性自动安装。新增 Agent 时，理想情况是新增一个 adapter 和对应测试，而不是改宠物渲染或设置架构。
 
-当前 adapters 覆盖 Claude Code、Codex、Antigravity、OpenCode、Cursor、Copilot CLI、Pi、Gemini。
+当前 adapters 覆盖 Claude Code、Codex、Antigravity、OpenCode、Cursor、Copilot CLI、Pi、Gemini、WorkBuddy。
 
 ## 资源包
 

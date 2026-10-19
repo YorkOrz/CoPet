@@ -27,3 +27,6 @@ mod opencode;
 
 #[path = "agent_support/pi.rs"]
 mod pi;
+
+#[path = "agent_support/workbuddy.rs"]
+mod workbuddy;

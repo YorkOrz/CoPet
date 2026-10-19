@@ -14,7 +14,7 @@ pub(crate) const HELPER_NAME: &str = "copet-hook.exe";
 #[cfg(not(windows))]
 pub(crate) const HELPER_NAME: &str = "copet-hook.sh";
 
-static ADAPTERS: [&dyn CliAdapter; 8] = [
+static ADAPTERS: [&dyn CliAdapter; 9] = [
     adapters::CLAUDE_CODE,
     adapters::CODEX,
     adapters::ANTIGRAVITY,
@@ -23,6 +23,7 @@ static ADAPTERS: [&dyn CliAdapter; 8] = [
     adapters::COPILOT,
     adapters::PI,
     adapters::GEMINI,
+    adapters::WORKBUDDY,
 ];
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -97,6 +98,16 @@ pub(crate) trait CliAdapter: Sync {
     fn install(&self, manager: &AgentManager) -> Result<(), AdapterError>;
     fn uninstall(&self, manager: &AgentManager) -> Result<(), AdapterError>;
     fn executable_names(&self) -> &'static [&'static str];
+    /// Whether the agent is present on this machine.
+    ///
+    /// Defaults to a PATH lookup. GUI-first agents can override this to also
+    /// accept an existing config directory, because their CLI is not always
+    /// installed as a separate executable.
+    fn is_present(&self, manager: &AgentManager) -> bool {
+        self.executable_names()
+            .iter()
+            .any(|name| manager.executable_exists(name))
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -252,10 +263,7 @@ impl AgentManager {
     }
 
     fn adapter_executable_available(&self, adapter: &dyn CliAdapter) -> bool {
-        adapter
-            .executable_names()
-            .iter()
-            .any(|name| self.executable_exists(name))
+        adapter.is_present(self)
     }
 
     fn ensure_agent_executable(&self, adapter: &dyn CliAdapter) -> Result<(), AdapterError> {
@@ -268,7 +276,7 @@ impl AgentManager {
         })
     }
 
-    fn executable_exists(&self, name: &str) -> bool {
+    pub(crate) fn executable_exists(&self, name: &str) -> bool {
         executable_candidates(name).iter().any(|candidate| {
             self.executable_search_paths
                 .iter()

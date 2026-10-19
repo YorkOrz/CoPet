@@ -2,7 +2,7 @@
   <img src="./public/pet.png" alt="CoPet logo" width="120" />
   <h1>CoPet</h1>
   <p><strong>A living desktop companion for every AI Agent.</strong></p>
-  <p>Powered by Codex-compatible pet packages, CoPet reacts in real time to Claude Code, Codex, Antigravity, OpenCode, Cursor, Copilot CLI, Pi, and Gemini, turning prompts, tool use, waiting, and completions into lively pet reactions on your desktop.</p>
+  <p>Powered by Codex-compatible pet packages, CoPet reacts in real time to Claude Code, Codex, Antigravity, OpenCode, Cursor, Copilot CLI, Pi, Gemini, and WorkBuddy, turning prompts, tool use, waiting, and completions into lively pet reactions on your desktop.</p>
 </div>
 
 ![CoPet](./public/banner.png)
@@ -47,7 +47,7 @@ Built with Tauri, Rust, and React. Lightweight, local-first, no cloud.
 ## Features
 
 - Real-time pet reactions to Agent prompts, tool use, waiting, completion, and errors.
-- Integrations for Claude Code, Codex, Antigravity, OpenCode, Cursor, Copilot CLI, Pi, and Gemini.
+- Integrations for Claude Code, Codex, Antigravity, OpenCode, Cursor, Copilot CLI, Pi, Gemini, and WorkBuddy.
 - Built-in pets plus import support for Codex-compatible pet packages.
 - Rich pet interactions: hover, click, double-click, rapid-click petting, long-press, drag reactions, and native context menu.
 - Global and per-pet sound packs for interactions and Agent states.
@@ -113,6 +113,9 @@ Restart Codex if the newly installed Skills do not appear.
 | Copilot CLI | JSON hook file | `~/.copilot/hooks/copet.json` |
 | Pi | TypeScript extension | `~/.pi/agent/extensions/copet/index.ts` |
 | Gemini | JSON hooks | `~/.gemini/settings.json` |
+| WorkBuddy | JSON hooks | `~/.workbuddy/settings.json` |
+
+WorkBuddy snapshots its hook configuration when a session starts. Restart WorkBuddy after toggling the integration, and confirm the CoPet entries if it asks you to review new hooks.
 
 ## Getting started
 
