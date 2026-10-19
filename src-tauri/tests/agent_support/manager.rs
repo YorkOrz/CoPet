@@ -29,6 +29,7 @@ fn list_exposes_each_platform_adapter() {
                 ("copilot".to_string(), "Copilot CLI".to_string()),
                 ("pi".to_string(), "Pi".to_string()),
                 ("gemini".to_string(), "Gemini".to_string()),
+                ("workbuddy".to_string(), "WorkBuddy".to_string()),
             ]
         );
     });
@@ -52,6 +53,7 @@ fn adapters_install_repair_and_uninstall_real_config_files() {
                 "copilot",
                 "gemini",
                 "pi",
+                "workbuddy",
             ] {
                 let installed = manager.install(adapter_id).unwrap();
                 assert!(installed.adapter.installed, "{adapter_id} should install");
@@ -143,6 +145,11 @@ fn assert_adapter_config_contains_marker(
             let marker = read_json(home.join(".pi/agent/extensions/copet/.copet-managed.json"));
             assert_eq!(marker["managed"], true);
         }
+        "workbuddy" => {
+            let value = read_json(home.join(".workbuddy/settings.json"));
+            assert!(value.to_string().contains("copet-hook"));
+            assert!(value.to_string().contains("workbuddy"));
+        }
         _ => unreachable!("unknown adapter"),
     }
 }
@@ -165,6 +172,7 @@ fn assert_adapter_config_does_not_contain_marker(
         "opencode" => assert!(!opencode_config_dir.join("plugins/copet.js").exists()),
         "copilot" => assert!(!home.join(".copilot/hooks/copet.json").exists()),
         "pi" => assert!(!home.join(".pi/agent/extensions/copet").exists()),
+        "workbuddy" => assert_json_file_lacks_marker(home.join(".workbuddy/settings.json")),
         _ => unreachable!("unknown adapter"),
     }
 }
@@ -201,7 +209,11 @@ fn auto_install_detected_agents_installs_only_available_cli_adapters() {
         );
         assert_eq!(
             summary.skipped,
-            vec!["claude-code".to_string(), "opencode".to_string()]
+            vec![
+                "claude-code".to_string(),
+                "opencode".to_string(),
+                "workbuddy".to_string()
+            ]
         );
         assert!(summary.failed.is_empty());
         assert!(home.join(".codex/hooks.json").exists());
@@ -212,6 +224,7 @@ fn auto_install_detected_agents_installs_only_available_cli_adapters() {
         assert!(home.join(".pi/agent/extensions/copet/index.ts").exists());
         assert!(!home.join(".claude/settings.json").exists());
         assert!(!home.join(".config/opencode/plugins/copet.js").exists());
+        assert!(!home.join(".workbuddy/settings.json").exists());
     });
 }
 

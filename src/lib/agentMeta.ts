@@ -8,7 +8,8 @@ export type AgentMetaKey =
   | "cursor"
   | "gemini"
   | "opencode"
-  | "pi";
+  | "pi"
+  | "workbuddy";
 
 type AgentMetaCopy = {
   vendor: string;
@@ -47,6 +48,10 @@ const AGENT_META: Record<AgentMetaKey, AgentMetaCopy> = {
   pi: {
     vendor: "Earendil Works",
     descriptionKey: "agentPiDescription",
+  },
+  workbuddy: {
+    vendor: "Tencent",
+    descriptionKey: "agentWorkbuddyDescription",
   },
 };
 

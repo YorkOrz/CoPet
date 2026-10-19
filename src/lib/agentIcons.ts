@@ -6,6 +6,7 @@ import cursorIconUrl from "../assets/agents/cursor.svg";
 import geminiIconUrl from "../assets/agents/gemini.svg";
 import openCodeIconUrl from "../assets/agents/opencode.svg";
 import piIconUrl from "../assets/agents/pi.svg";
+import workbuddyIconUrl from "../assets/agents/workbuddy.png";
 
 const agentIconUrls: Record<string, string> = {
   antigravity: antigravityIconUrl,
@@ -16,6 +17,7 @@ const agentIconUrls: Record<string, string> = {
   gemini: geminiIconUrl,
   opencode: openCodeIconUrl,
   pi: piIconUrl,
+  workbuddy: workbuddyIconUrl,
 };
 
 export function agentIconUrl(agentId: string): string | null {

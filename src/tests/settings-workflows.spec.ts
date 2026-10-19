@@ -10,6 +10,7 @@ import {
   nebula,
   piAdapter,
   copet,
+  workbuddyAdapter,
 } from "./app-harness";
 import type { PetSummary } from "./app-harness";
 
@@ -303,6 +304,40 @@ test("antigravity integration switch installs and uninstalls the adapter", async
     {
       command: "uninstall_agent_adapter",
       args: { adapterId: "antigravity" },
+    },
+  ]);
+});
+
+test("workbuddy integration switch installs and uninstalls the adapter", async ({
+  browser,
+}) => {
+  const harness = await createAppHarness(browser, {
+    adapters: [workbuddyAdapter],
+  });
+  const page = await harness.openPage("settings");
+  await page.getByRole("tab", { name: "Agents" }).click();
+  const workbuddySwitch = page.getByRole("switch", { name: "WorkBuddy" });
+
+  await expect(workbuddySwitch).toHaveAttribute("aria-checked", "false");
+  await workbuddySwitch.click();
+  await expect(workbuddySwitch).toHaveAttribute("aria-checked", "true");
+
+  await workbuddySwitch.click();
+  await expect(workbuddySwitch).toHaveAttribute("aria-checked", "false");
+
+  const adapterCalls = harness.calls.filter(
+    (call) =>
+      call.command === "install_agent_adapter" ||
+      call.command === "uninstall_agent_adapter",
+  );
+  expect(adapterCalls).toEqual([
+    {
+      command: "install_agent_adapter",
+      args: { adapterId: "workbuddy" },
+    },
+    {
+      command: "uninstall_agent_adapter",
+      args: { adapterId: "workbuddy" },
     },
   ]);
 });
