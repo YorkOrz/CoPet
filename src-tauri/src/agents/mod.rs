@@ -482,7 +482,7 @@ fn hook_group_matches_event(group: &Value, adapter_id: &str, event: &HookEvent) 
                     .get("command")
                     .and_then(Value::as_str)
                     .is_some_and(|command| {
-                        command.contains(HELPER_NAME) && command.contains(&format!(" {adapter_id} {}", event.kind))
+                        command_invokes_copet_helper(command, adapter_id, Some(event.kind))
                     })
             })
         })
@@ -497,7 +497,7 @@ fn hook_group_has_copet_command(group: &Value, adapter_id: &str) -> bool {
                 handler
                     .get("command")
                     .and_then(Value::as_str)
-                    .is_some_and(|command| command.contains(HELPER_NAME) && command.contains(&format!(" {adapter_id} ")))
+                    .is_some_and(|command| is_copet_command(command, adapter_id))
             })
         })
 }
@@ -568,24 +568,92 @@ fn remove_copet_hooks(value: &mut Value, adapter_id: &str) {
 }
 
 fn is_copet_command(command: &str, adapter_id: &str) -> bool {
-    (command.contains(HELPER_NAME) || command.contains("copet-hook"))
-        && command.contains(&format!(" {adapter_id} "))
+    command_invokes_copet_helper(command, adapter_id, None)
+}
+
+/// 判断一条 hook 命令是否确实调用了 CoPet helper，且参数精确匹配。
+///
+/// 只认「helper 可执行文件 + adapter id + kind」这组精确 token：注释里出现的
+/// `copet-hook`、名字带同前缀的别的脚本、或别的 adapter 的调用都不算。
+/// 同时兼容三种写法：
+/// - Unix shell：`if [ -f 'P' ]; then 'P' <id> <kind>; else echo "{}"; fi`
+/// - Windows 裸命令：`"C:\...\copet-hook.exe" <id> <kind>`
+/// - Windows cmd：`if exist "P" ("P" <id> <kind>) else (echo {})`
+fn command_invokes_copet_helper(command: &str, adapter_id: &str, kind: Option<&str>) -> bool {
+    let tokens = tokenize_command(command);
+    tokens.iter().enumerate().any(|(index, token)| {
+        if helper_file_name(token) != Some(HELPER_NAME) {
+            return false;
+        }
+        if tokens.get(index + 1).map(String::as_str) != Some(adapter_id) {
+            return false;
+        }
+        match kind {
+            Some(expected) => tokens.get(index + 2).map(String::as_str) == Some(expected),
+            None => true,
+        }
+    })
+}
+
+fn helper_file_name(token: &str) -> Option<&str> {
+    token
+        .rsplit(['/', '\\'])
+        .next()
+        .filter(|name| !name.is_empty())
+}
+
+/// 把 shell 命令切成 token：引号内的路径保持完整，`;`、括号、管道和注释都当分隔符。
+fn tokenize_command(command: &str) -> Vec<String> {
+    fn flush(tokens: &mut Vec<String>, current: &mut String) {
+        if !current.is_empty() {
+            tokens.push(std::mem::take(current));
+        }
+    }
+
+    let mut tokens = Vec::new();
+    let mut current = String::new();
+    let mut chars = command.chars().peekable();
+    let mut in_single = false;
+    let mut in_double = false;
+
+    while let Some(ch) = chars.next() {
+        match ch {
+            '\'' if !in_double => in_single = !in_single,
+            '"' if !in_single => in_double = !in_double,
+            '#' if !in_single && !in_double && current.is_empty() => {
+                for next in chars.by_ref() {
+                    if next == '\n' {
+                        break;
+                    }
+                }
+            }
+            c if !in_single
+                && !in_double
+                && (c.is_whitespace() || matches!(c, ';' | '(' | ')' | '|' | '&')) =>
+            {
+                flush(&mut tokens, &mut current);
+            }
+            _ => current.push(ch),
+        }
+    }
+    flush(&mut tokens, &mut current);
+    tokens
 }
 
 fn hook_command(adapter_id: &str, helper_path: &Path, kind: &str) -> String {
+    let fallback_output = hook_default_output(adapter_id, kind);
     #[cfg(windows)]
     {
-		let path = helper_path.to_string_lossy();
-		if path.contains(' ') {
-			format!("\"{path}\" {adapter_id} {kind}")
-		} else {
-			format!("{path} {adapter_id} {kind}")
-		}
+        // cmd.exe 语法：helper 被删除或被杀软隔离时也必须返回约定输出，
+        // 否则 Cursor 的 beforeSubmitPrompt 会拿到空 stdout。
+        let path = helper_path.to_string_lossy();
+        format!(
+            "if exist \"{path}\" (\"{path}\" {adapter_id} {kind}) else (echo {fallback_output})"
+        )
     }
     #[cfg(not(windows))]
     {
         let path = shell_quote(&helper_path.to_string_lossy());
-        let fallback_output = hook_default_output(adapter_id, kind);
         if fallback_output == "{}" {
             format!("if [ -f {path} ]; then {path} {adapter_id} {kind}; else echo \"{{}}\"; fi")
         } else {
@@ -810,4 +878,102 @@ fn now_ms() -> u128 {
 
 pub(crate) fn agents_now_ms_for_marker() -> u128 {
     now_ms()
+}
+
+#[cfg(test)]
+mod hook_command_tests {
+    use super::{command_invokes_copet_helper, HELPER_NAME};
+
+    fn unix_helper() -> String {
+        format!("/home/u/.copet/hooks/{HELPER_NAME}")
+    }
+
+    fn windows_helper() -> String {
+        format!("C://Users//u//.copet//hooks//{HELPER_NAME}")
+    }
+
+    #[test]
+    fn unix_hook_command_matches_only_its_own_adapter_and_kind() {
+        let helper = unix_helper();
+        let command = format!(
+            "if [ -f '{helper}' ]; then '{helper}' cursor user.prompt; else printf '%s\\n' '{{\"continue\":true}}'; fi"
+        );
+
+        assert!(command_invokes_copet_helper(
+            &command,
+            "cursor",
+            Some("user.prompt")
+        ));
+        assert!(!command_invokes_copet_helper(
+            &command,
+            "cursor",
+            Some("session.stop")
+        ));
+        assert!(!command_invokes_copet_helper(
+            &command,
+            "codex",
+            Some("user.prompt")
+        ));
+        assert!(command_invokes_copet_helper(&command, "cursor", None));
+    }
+
+    #[test]
+    fn windows_cmd_hook_command_matches_and_keeps_fallback_out_of_match() {
+        let helper = windows_helper();
+        let command = format!(
+            "if exist \"{helper}\" (\"{helper}\" antigravity tool.before) else (echo {{\"decision\":\"allow\"}})"
+        );
+
+        assert!(command_invokes_copet_helper(
+            &command,
+            "antigravity",
+            Some("tool.before")
+        ));
+        assert!(!command_invokes_copet_helper(
+            &command,
+            "antigravity",
+            Some("tool.after")
+        ));
+    }
+
+    #[test]
+    fn bare_windows_command_matches() {
+        let helper = windows_helper();
+        let command = format!("\"{helper}\" workbuddy user.prompt");
+
+        assert!(command_invokes_copet_helper(
+            &command,
+            "workbuddy",
+            Some("user.prompt")
+        ));
+    }
+
+    #[test]
+    fn helper_mentioned_in_comment_is_not_an_install() {
+        let helper = unix_helper();
+        let command = format!(
+            "if [ -f '{helper}' ]; then # {helper} antigravity tool.after\n'/tmp/other.sh' antigravity tool.after; else echo \"{{}}\"; fi"
+        );
+
+        assert!(!command_invokes_copet_helper(
+            &command,
+            "antigravity",
+            Some("tool.after")
+        ));
+    }
+
+    #[test]
+    fn helper_name_must_match_exactly() {
+        let helper = unix_helper();
+        let lookalike = format!("{helper}.bak");
+        let command = format!(
+            "if [ -f '{lookalike}' ]; then '{lookalike}' cursor user.prompt; else echo \"{{}}\"; fi"
+        );
+
+        assert!(!command_invokes_copet_helper(
+            &command,
+            "cursor",
+            Some("user.prompt")
+        ));
+    }
 }

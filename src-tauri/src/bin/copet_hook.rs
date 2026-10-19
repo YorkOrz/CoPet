@@ -19,7 +19,9 @@ fn main() {
         let _ = std::io::stdin().read_to_string(&mut buf);
         let _ = tx.send(buf);
     });
-    let input = rx.recv_timeout(Duration::from_millis(150)).unwrap_or_default();
+    let input = rx
+        .recv_timeout(Duration::from_millis(150))
+        .unwrap_or_default();
 
     let parsed: Option<Value> = serde_json::from_str(&input).ok();
 
@@ -68,7 +70,12 @@ fn main() {
         }
     }
 
-    let _ = send_event(agent, &mapped_kind, mapped_tool.as_deref(), tool_input.as_ref());
+    let _ = send_event(
+        agent,
+        &mapped_kind,
+        mapped_tool.as_deref(),
+        tool_input.as_ref(),
+    );
 
     if agent == "antigravity" && (kind == "tool.before" || kind == "session.stop") {
         println!(r#"{{"decision":"allow"}}"#);

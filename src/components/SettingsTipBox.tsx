@@ -1,4 +1,4 @@
-import boxImg from "@/assets/box.png";
+import boxImg from "@/assets/box.webp";
 import type { Translator } from "../lib/settingsTypes";
 
 interface SettingsTipBoxProps {

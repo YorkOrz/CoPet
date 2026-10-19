@@ -261,7 +261,11 @@ fn map_event_to_state(event: &RuntimeEvent) -> Option<PetStateId> {
         }
         "tool.before"
             if matches!(
-                event.tool.as_deref().map(|s| s.to_ascii_lowercase()).as_deref(),
+                event
+                    .tool
+                    .as_deref()
+                    .map(|s| s.to_ascii_lowercase())
+                    .as_deref(),
                 Some("ask_question" | "askquestion" | "question" | "request_user_input")
             ) =>
         {

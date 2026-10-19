@@ -174,10 +174,5 @@ fn handlers_have_copet_kind(handlers: &[Value], adapter_id: &str, kind: &str) ->
 }
 
 fn is_antigravity_copet_command(command: &str, adapter_id: &str, kind: &str) -> bool {
-    let target = format!("{adapter_id} {kind}");
-    if !command.contains(&target) {
-        return false;
-    }
-    command.contains("copet-hook")
+    super::super::command_invokes_copet_helper(command, adapter_id, Some(kind))
 }
-
