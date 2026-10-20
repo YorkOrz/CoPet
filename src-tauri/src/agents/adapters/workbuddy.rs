@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use super::super::{
     install_json_hooks, json_config_has_copet_hook, remove_json_hooks, AdapterError, AgentManager,
-    CliAdapter, HookEvent,
+    CliAdapter, HookEvent, HookShell,
 };
 
 pub(super) static ADAPTER: WorkBuddyAdapter = WorkBuddyAdapter;
@@ -70,12 +70,16 @@ impl CliAdapter for WorkBuddyAdapter {
     }
 
     fn install(&self, manager: &AgentManager) -> Result<(), AdapterError> {
+        // WorkBuddy 的 HookExecutor 用 PortableGit 的 `bash -c` 跑命令：
+        // 必须给正斜杠路径的 POSIX 语法，反斜杠会被 bash 当转义符吃掉（实测 exit 127）。
+        // 超时给 5s：bash 冷启动 + helper 等 stdin EOF 差不多要 1s，1s 会被直接杀掉。
         install_json_hooks(
             manager,
             self.id(),
             &self.config_path(manager.home()),
             EVENTS,
-            1,
+            5,
+            HookShell::Posix,
         )
     }
 

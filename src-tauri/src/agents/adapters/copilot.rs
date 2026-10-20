@@ -7,7 +7,7 @@ use serde_json::{json, Value};
 
 use super::super::{
     hook_command, read_json_object_optional, write_json_atomic, AdapterError, AgentManager,
-    CliAdapter, HELPER_NAME,
+    CliAdapter, HookShell, HELPER_NAME,
 };
 
 pub(super) static ADAPTER: CopilotCliAdapter = CopilotCliAdapter;
@@ -137,7 +137,7 @@ fn copilot_hooks_file(adapter_id: &str, helper_path: &Path) -> Value {
             event.cli_event.to_string(),
             json!([{
                 "type": "command",
-                "bash": hook_command(adapter_id, helper_path, event.kind),
+                "bash": hook_command(adapter_id, helper_path, event.kind, HookShell::Cmd),
                 "timeoutSec": 1
             }]),
         );

@@ -28,6 +28,22 @@ fn workbuddy_install_merges_hooks_and_uninstall_preserves_user_config() {
     assert!(root.join("adapters/workbuddy.json").exists());
     assert!(root.join("backups/workbuddy").exists());
 
+    // WorkBuddy 的 HookExecutor 走 PortableGit 的 bash：反斜杠会被当成转义符，
+    // 命令必须是正斜杠的 POSIX 形态，否则实测 exit 127。
+    let value: serde_json::Value = serde_json::from_str(&installed).unwrap();
+    let command = value["hooks"]["PreToolUse"][0]["hooks"][0]["command"]
+        .as_str()
+        .unwrap();
+    assert!(
+        !command.contains('\\'),
+        "hook command must use forward slashes: {command}"
+    );
+    assert!(
+        command.starts_with("if [ -f "),
+        "hook command must use POSIX shell syntax: {command}"
+    );
+    assert_eq!(value["hooks"]["PreToolUse"][0]["hooks"][0]["timeout"], 5);
+
     manager.uninstall("workbuddy").unwrap();
     let uninstalled = fs::read_to_string(&settings).unwrap();
     assert!(uninstalled.contains("extraAllowWrite"));

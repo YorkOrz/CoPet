@@ -395,6 +395,7 @@ pub(crate) fn install_json_hooks(
     path: &Path,
     events: &[HookEvent],
     timeout: u64,
+    shell: HookShell,
 ) -> Result<(), AdapterError> {
     manager.backup_file(adapter_id, path)?;
     let mut value = read_json_object_optional(path)?.unwrap_or_else(|| json!({}));
@@ -405,6 +406,7 @@ pub(crate) fn install_json_hooks(
         &manager.helper_path(),
         events,
         timeout,
+        shell,
         path,
     )?;
     write_json_atomic(path, &value)?;
@@ -514,6 +516,7 @@ fn merge_hook_entries(
     helper_path: &Path,
     events: &[HookEvent],
     timeout: u64,
+    shell: HookShell,
     path: &Path,
 ) -> Result<(), AdapterError> {
     let object = value
@@ -528,7 +531,7 @@ fn merge_hook_entries(
         let mut group = json!({
             "hooks": [{
                 "type": "command",
-                "command": hook_command(adapter_id, helper_path, event.kind),
+                "command": hook_command(adapter_id, helper_path, event.kind, shell),
                 "timeout": timeout,
                 "statusMessage": "Updating CoPet"
             }]
@@ -651,8 +654,24 @@ fn tokenize_command(command: &str) -> Vec<String> {
     tokens
 }
 
-fn hook_command(adapter_id: &str, helper_path: &Path, kind: &str) -> String {
+/// hook 命令使用哪种 shell 语法。
+///
+/// Windows 上多数 agent 用 cmd.exe 执行 hook，但 WorkBuddy 的 `HookExecutor` 是用
+/// PortableGit 的 `bash -c` 执行的：裸反斜杠路径会被 bash 当成转义符吃掉，
+/// 变成 `C:UsersAdministrator...` 直接 exit 127。这类 agent 必须用 `Posix`。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum HookShell {
+    /// Windows 上按 cmd.exe 语法生成，其它平台按 POSIX 语法。
+    Cmd,
+    /// 无论什么平台都用 POSIX 语法，并要求路径为正斜杠。
+    Posix,
+}
+
+fn hook_command(adapter_id: &str, helper_path: &Path, kind: &str, shell: HookShell) -> String {
     let fallback_output = hook_default_output(adapter_id, kind);
+    if shell == HookShell::Posix {
+        return posix_hook_command(adapter_id, helper_path, kind, fallback_output);
+    }
     #[cfg(windows)]
     {
         // cmd.exe 语法：helper 被删除或被杀软隔离时也必须返回约定输出，
@@ -664,15 +683,7 @@ fn hook_command(adapter_id: &str, helper_path: &Path, kind: &str) -> String {
     }
     #[cfg(not(windows))]
     {
-        let path = shell_quote(&helper_path.to_string_lossy());
-        if fallback_output == "{}" {
-            format!("if [ -f {path} ]; then {path} {adapter_id} {kind}; else echo \"{{}}\"; fi")
-        } else {
-            let fallback = shell_quote(fallback_output);
-            format!(
-                "if [ -f {path} ]; then {path} {adapter_id} {kind}; else printf '%s\\n' {fallback}; fi"
-            )
-        }
+        posix_hook_command(adapter_id, helper_path, kind, fallback_output)
     }
 }
 
@@ -683,6 +694,26 @@ fn hook_default_output(adapter_id: &str, kind: &str) -> &'static str {
         r#"{"continue":true}"#
     } else {
         "{}"
+    }
+}
+
+/// POSIX shell 版 hook 命令。
+///
+/// 路径统一转成正斜杠：Windows 上 bash 会把 `\` 当转义符，反斜杠路径必然 exit 127。
+fn posix_hook_command(
+    adapter_id: &str,
+    helper_path: &Path,
+    kind: &str,
+    fallback_output: &str,
+) -> String {
+    let path = shell_quote(&helper_path.to_string_lossy().replace('\\', "/"));
+    if fallback_output == "{}" {
+        format!("if [ -f {path} ]; then {path} {adapter_id} {kind}; else echo \"{{}}\"; fi")
+    } else {
+        let fallback = shell_quote(fallback_output);
+        format!(
+            "if [ -f {path} ]; then {path} {adapter_id} {kind}; else printf '%s\\n' {fallback}; fi"
+        )
     }
 }
 

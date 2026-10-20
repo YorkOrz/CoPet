@@ -4,7 +4,7 @@ use serde_json::{json, Value};
 
 use super::super::{
     hook_command, read_json_object_optional, read_json_object_required, write_json_atomic,
-    AdapterError, AgentManager, CliAdapter,
+    AdapterError, AgentManager, CliAdapter, HookShell,
 };
 
 pub(super) static ADAPTER: CursorAdapter = CursorAdapter;
@@ -116,7 +116,7 @@ fn install_cursor_hooks(
             .as_array_mut()
             .ok_or_else(|| AdapterError::InvalidJson(path.to_path_buf()))?
             .push(json!({
-                "command": hook_command(adapter_id, helper_path, event.kind),
+                "command": hook_command(adapter_id, helper_path, event.kind, HookShell::Cmd),
                 "timeout": 1
             }));
     }

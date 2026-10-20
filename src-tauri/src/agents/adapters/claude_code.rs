@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use super::super::{
     install_json_hooks, json_config_has_copet_hook, remove_json_hooks, AdapterError, AgentManager,
-    CliAdapter, HookEvent,
+    CliAdapter, HookEvent, HookShell,
 };
 
 pub(super) static ADAPTER: ClaudeCodeAdapter = ClaudeCodeAdapter;
@@ -77,6 +77,7 @@ impl CliAdapter for ClaudeCodeAdapter {
             &self.config_path(manager.home()),
             EVENTS,
             1,
+            HookShell::Cmd,
         )
     }
 
