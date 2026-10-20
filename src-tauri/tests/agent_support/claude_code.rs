@@ -1,4 +1,4 @@
-use super::helpers::manager_with_fake_agents;
+use super::helpers::{home_path, manager_with_fake_agents, HELPER_NAME};
 use std::{
     fs,
     io::{Read, Write},
@@ -13,7 +13,7 @@ fn claude_install_merges_hooks_and_uninstall_preserves_user_hooks() {
     let temp = tempfile::tempdir().unwrap();
     let home = temp.path().join("home");
     let root = temp.path().join(".copet");
-    let settings = home.join(".claude/settings.json");
+    let settings = home_path(&home, ".claude/settings.json");
     fs::create_dir_all(settings.parent().unwrap()).unwrap();
     fs::write(
         &settings,
@@ -25,7 +25,7 @@ fn claude_install_merges_hooks_and_uninstall_preserves_user_hooks() {
     manager.install("claude-code").unwrap();
     let installed = fs::read_to_string(&settings).unwrap();
     assert!(installed.contains("echo user"));
-    assert!(installed.contains("copet-hook.sh"));
+    assert!(installed.contains(HELPER_NAME));
     assert!(installed.contains("claude-code"));
     assert!(installed.contains("tool.before"));
     assert!(root.join("adapters/claude-code.json").exists());
@@ -34,7 +34,7 @@ fn claude_install_merges_hooks_and_uninstall_preserves_user_hooks() {
     manager.uninstall("claude-code").unwrap();
     let uninstalled = fs::read_to_string(&settings).unwrap();
     assert!(uninstalled.contains("echo user"));
-    assert!(!uninstalled.contains("copet-hook.sh"));
+    assert!(!uninstalled.contains(HELPER_NAME));
     assert!(!root.join("adapters/claude-code.json").exists());
 }
 
@@ -43,7 +43,7 @@ fn claude_install_rejects_non_object_hooks_without_panicking() {
     let temp = tempfile::tempdir().unwrap();
     let home = temp.path().join("home");
     let root = temp.path().join(".copet");
-    let settings = home.join(".claude/settings.json");
+    let settings = home_path(&home, ".claude/settings.json");
     fs::create_dir_all(settings.parent().unwrap()).unwrap();
     fs::write(&settings, r#"{"hooks":"not an object"}"#).unwrap();
     let manager = manager_with_fake_agents(&root, &home);
@@ -58,7 +58,7 @@ fn claude_inspect_ignores_copet_text_outside_hook_commands() {
     let temp = tempfile::tempdir().unwrap();
     let home = temp.path().join("home");
     let root = temp.path().join(".copet");
-    let settings = home.join(".claude/settings.json");
+    let settings = home_path(&home, ".claude/settings.json");
     fs::create_dir_all(settings.parent().unwrap()).unwrap();
     fs::write(
         &settings,
@@ -121,7 +121,7 @@ fn claude_helper_ignores_cursor_compatibility_hook_payloads() {
         }
     });
 
-    let mut child = Command::new(root.join("hooks/copet-hook.sh"))
+    let mut child = Command::new(root.join("hooks").join(HELPER_NAME))
         .args(["claude-code", "user.prompt"])
         .env("COPET_RUNTIME_DIR", &runtime)
         .stdin(Stdio::piped())

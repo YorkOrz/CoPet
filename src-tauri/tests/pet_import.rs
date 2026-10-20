@@ -65,17 +65,18 @@ fn create_pet_package(root: &Path, storage_id: &str, manifest_id: &str, display_
 fn preview_session_directory_is_under_copet_root() {
     let _guard = HOME_ENV_LOCK.lock().unwrap();
     let temp = tempfile::tempdir().unwrap();
-    let home = temp.path().join("home");
-    let _restore_home = EnvRestore {
-        key: "HOME",
-        value: env::var_os("HOME"),
+    let root = temp.path().join("home").join(".copet");
+    let _restore = EnvRestore {
+        key: "COPET_HOME_DIR",
+        value: env::var_os("COPET_HOME_DIR"),
     };
-    env::set_var("HOME", &home);
+    // `COPET_HOME_DIR` 让 `ConfigStore::from_home()` 落在临时目录，
+    // 不依赖各平台解析 home 的差异（Windows 上 `dirs` 不读 USERPROFILE）。
+    env::set_var("COPET_HOME_DIR", &root);
 
     let session = copet_lib::create_pet_import_session().unwrap();
 
-    assert!(home
-        .join(".copet")
+    assert!(root
         .join("import-previews")
         .join(session.session_id)
         .exists());
@@ -179,6 +180,8 @@ fn preview_folder_imports_skips_unsafe_manifest_id_without_staging() {
     assert!(!store.root().join("pets/bad-manifest").exists());
 }
 
+// `bad:id` 目录名在 Windows 上无法创建（`:` 是保留字符）。
+#[cfg(unix)]
 #[test]
 fn preview_folder_imports_skips_unsafe_source_storage_id_without_staging() {
     let temp = tempfile::tempdir().unwrap();

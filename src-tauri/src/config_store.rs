@@ -82,11 +82,26 @@ pub fn builtin_sounds_dir() -> Option<PathBuf> {
     BUILTIN_SOUNDS_DIR.get().cloned()
 }
 
+/// Root of CoPet's user data directory (`~/.copet` on every platform).
+///
+/// `COPET_HOME_DIR` overrides it, mirroring `COPET_RUNTIME_DIR` on the helper side.
+/// Tests use it to keep state inside a temp dir; portable setups can use it to relocate
+/// the config, pets and sounds without touching the real user profile.
+pub fn copet_home_dir() -> Result<PathBuf, StoreError> {
+    if let Some(value) = std::env::var_os("COPET_HOME_DIR") {
+        if !value.is_empty() {
+            return Ok(PathBuf::from(value));
+        }
+    }
+
+    let home = dirs::home_dir().ok_or(StoreError::MissingHome)?;
+    Ok(home.join(".copet"))
+}
+
 impl ConfigStore {
     pub fn from_home() -> Result<Self, StoreError> {
-        let home = dirs::home_dir().ok_or(StoreError::MissingHome)?;
         Ok(Self {
-            root: home.join(".copet"),
+            root: copet_home_dir()?,
             builtin_pets_dir: builtin_pets_dir(),
             builtin_sounds_dir: builtin_sounds_dir(),
         })

@@ -74,6 +74,10 @@ impl CliAdapter for CopilotCliAdapter {
         }
     }
 
+    fn is_supported(&self) -> bool {
+        !cfg!(windows)
+    }
+
     fn is_installed(
         &self,
         manager: &AgentManager,
