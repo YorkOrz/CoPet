@@ -10,9 +10,9 @@ use std::{
 
 pub(crate) const COPET_MARKER: &str = "copet-managed-hook";
 #[cfg(windows)]
-pub(crate) const HELPER_NAME: &str = "copet-hook.exe";
+pub const HELPER_NAME: &str = "copet-hook.exe";
 #[cfg(not(windows))]
-pub(crate) const HELPER_NAME: &str = "copet-hook.sh";
+pub const HELPER_NAME: &str = "copet-hook.sh";
 
 static ADAPTERS: [&dyn CliAdapter; 9] = [
     adapters::CLAUDE_CODE,
@@ -107,6 +107,12 @@ pub(crate) trait CliAdapter: Sync {
         self.executable_names()
             .iter()
             .any(|name| manager.executable_exists(name))
+    }
+
+    /// Whether hooks are supported on this platform. Unsupported adapters are
+    /// skipped by auto-install instead of being reported as failures.
+    fn is_supported(&self) -> bool {
+        true
     }
 }
 
@@ -222,7 +228,7 @@ impl AgentManager {
 
         for adapter in ADAPTERS {
             let adapter_id = adapter.id().to_string();
-            if !self.adapter_executable_available(adapter) {
+            if !adapter.is_supported() || !self.adapter_executable_available(adapter) {
                 summary.skipped.push(adapter_id);
                 continue;
             }
@@ -579,18 +585,23 @@ fn is_copet_command(command: &str, adapter_id: &str) -> bool {
 /// - Unix shell：`if [ -f 'P' ]; then 'P' <id> <kind>; else echo "{}"; fi`
 /// - Windows 裸命令：`"C:\...\copet-hook.exe" <id> <kind>`
 /// - Windows cmd：`if exist "P" ("P" <id> <kind>) else (echo {})`
-fn command_invokes_copet_helper(command: &str, adapter_id: &str, kind: Option<&str>) -> bool {
+pub fn command_invokes_copet_helper(command: &str, adapter_id: &str, kind: Option<&str>) -> bool {
+    copet_helper_invocation(command, adapter_id, kind).is_some()
+}
+
+/// 返回命令里调用的 helper 路径，供需要校验具体安装路径的 adapter 复用。
+fn copet_helper_invocation(command: &str, adapter_id: &str, kind: Option<&str>) -> Option<String> {
     let tokens = tokenize_command(command);
-    tokens.iter().enumerate().any(|(index, token)| {
+    tokens.iter().enumerate().find_map(|(index, token)| {
         if helper_file_name(token) != Some(HELPER_NAME) {
-            return false;
+            return None;
         }
         if tokens.get(index + 1).map(String::as_str) != Some(adapter_id) {
-            return false;
+            return None;
         }
         match kind {
-            Some(expected) => tokens.get(index + 2).map(String::as_str) == Some(expected),
-            None => true,
+            Some(expected) if tokens.get(index + 2).map(String::as_str) != Some(expected) => None,
+            _ => Some(token.clone()),
         }
     })
 }
@@ -878,102 +889,4 @@ fn now_ms() -> u128 {
 
 pub(crate) fn agents_now_ms_for_marker() -> u128 {
     now_ms()
-}
-
-#[cfg(test)]
-mod hook_command_tests {
-    use super::{command_invokes_copet_helper, HELPER_NAME};
-
-    fn unix_helper() -> String {
-        format!("/home/u/.copet/hooks/{HELPER_NAME}")
-    }
-
-    fn windows_helper() -> String {
-        format!("C://Users//u//.copet//hooks//{HELPER_NAME}")
-    }
-
-    #[test]
-    fn unix_hook_command_matches_only_its_own_adapter_and_kind() {
-        let helper = unix_helper();
-        let command = format!(
-            "if [ -f '{helper}' ]; then '{helper}' cursor user.prompt; else printf '%s\\n' '{{\"continue\":true}}'; fi"
-        );
-
-        assert!(command_invokes_copet_helper(
-            &command,
-            "cursor",
-            Some("user.prompt")
-        ));
-        assert!(!command_invokes_copet_helper(
-            &command,
-            "cursor",
-            Some("session.stop")
-        ));
-        assert!(!command_invokes_copet_helper(
-            &command,
-            "codex",
-            Some("user.prompt")
-        ));
-        assert!(command_invokes_copet_helper(&command, "cursor", None));
-    }
-
-    #[test]
-    fn windows_cmd_hook_command_matches_and_keeps_fallback_out_of_match() {
-        let helper = windows_helper();
-        let command = format!(
-            "if exist \"{helper}\" (\"{helper}\" antigravity tool.before) else (echo {{\"decision\":\"allow\"}})"
-        );
-
-        assert!(command_invokes_copet_helper(
-            &command,
-            "antigravity",
-            Some("tool.before")
-        ));
-        assert!(!command_invokes_copet_helper(
-            &command,
-            "antigravity",
-            Some("tool.after")
-        ));
-    }
-
-    #[test]
-    fn bare_windows_command_matches() {
-        let helper = windows_helper();
-        let command = format!("\"{helper}\" workbuddy user.prompt");
-
-        assert!(command_invokes_copet_helper(
-            &command,
-            "workbuddy",
-            Some("user.prompt")
-        ));
-    }
-
-    #[test]
-    fn helper_mentioned_in_comment_is_not_an_install() {
-        let helper = unix_helper();
-        let command = format!(
-            "if [ -f '{helper}' ]; then # {helper} antigravity tool.after\n'/tmp/other.sh' antigravity tool.after; else echo \"{{}}\"; fi"
-        );
-
-        assert!(!command_invokes_copet_helper(
-            &command,
-            "antigravity",
-            Some("tool.after")
-        ));
-    }
-
-    #[test]
-    fn helper_name_must_match_exactly() {
-        let helper = unix_helper();
-        let lookalike = format!("{helper}.bak");
-        let command = format!(
-            "if [ -f '{lookalike}' ]; then '{lookalike}' cursor user.prompt; else echo \"{{}}\"; fi"
-        );
-
-        assert!(!command_invokes_copet_helper(
-            &command,
-            "cursor",
-            Some("user.prompt")
-        ));
-    }
 }

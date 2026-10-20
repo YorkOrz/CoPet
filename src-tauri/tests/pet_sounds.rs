@@ -1,4 +1,9 @@
 use copet_lib::config_store::ConfigStore;
+/// 期望值里的 `/` 换成当前平台分隔符，产品侧用 PathBuf::join 生成路径。
+fn native_path(path: &str) -> String {
+    path.replace('/', std::path::MAIN_SEPARATOR_STR)
+}
+
 use std::{
     env, fs,
     path::{Path, PathBuf},
@@ -243,7 +248,7 @@ fn import_pet_folder_preserves_valid_sound_resources() {
         .click
         .as_ref()
         .unwrap()
-        .contains("folder-sound-pet/copet/sound/click.mp3"));
+        .contains(&native_path("folder-sound-pet/copet/sound/click.mp3")));
 }
 
 #[test]
@@ -275,7 +280,7 @@ fn import_pet_folder_from_relative_path_preserves_valid_sound_resources() {
         .click
         .as_ref()
         .unwrap()
-        .contains("relative-sound-pet/copet/sound/click.mp3"));
+        .contains(&native_path("relative-sound-pet/copet/sound/click.mp3")));
 }
 
 #[test]
@@ -305,7 +310,7 @@ fn import_pet_folder_from_installed_package_preserves_package() {
         .click
         .as_ref()
         .unwrap()
-        .contains("reimport-sound-pet/copet/sound/click.mp3"));
+        .contains(&native_path("reimport-sound-pet/copet/sound/click.mp3")));
 }
 
 #[test]
@@ -341,7 +346,7 @@ fn install_codex_pet_preserves_valid_sound_resources() {
         .click
         .as_ref()
         .unwrap()
-        .contains("codex-sound-pet/copet/sound/click.mp3"));
+        .contains(&native_path("codex-sound-pet/copet/sound/click.mp3")));
 }
 
 #[test]
