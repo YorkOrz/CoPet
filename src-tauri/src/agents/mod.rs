@@ -791,7 +791,15 @@ if [ -n "$tool" ]; then
   escaped_tool="$(json_escape "$tool")"
   tool_field=",\"tool\":\"$escaped_tool\""
 fi
-payload="$(printf '{"agent":"%s","kind":"%s"%s%s}' "$(json_escape "$agent")" "$(json_escape "$kind")" "$tool_field" "$tool_input")"
+session="$(json_string_field session_id)"
+if [ -z "$session" ]; then
+  session="$(json_string_field sessionId)"
+fi
+session_field=""
+if [ -n "$session" ]; then
+  session_field=",\"sessionId\":\"$(json_escape "$session")\""
+fi
+payload="$(printf '{"agent":"%s","kind":"%s"%s%s%s}' "$(json_escape "$agent")" "$(json_escape "$kind")" "$tool_field" "$tool_input" "$session_field")"
 curl -fsS --noproxy '*' --max-time 0.8 -H "Authorization: Bearer $token" -H "Content-Type: application/json" -d "$payload" "$endpoint" >/dev/null 2>&1 || true
 hook_output
 exit 0

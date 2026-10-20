@@ -24,6 +24,11 @@ fn main() {
         .recv_timeout(Duration::from_millis(1500))
         .unwrap_or_default();
 
+    // 排查用：COPET_HOOK_DEBUG 指向一个文件路径时，把原始 payload 落盘。
+    if let Some(path) = env::var_os("COPET_HOOK_DEBUG") {
+        let _ = fs::write(path, &input);
+    }
+
     let parsed: Option<Value> = serde_json::from_str(&input).ok();
 
     // Claude Code 也会收到 Cursor 兼容 payload（带 cursor_version），此时不该再发一次事件。
@@ -62,7 +67,27 @@ fn main() {
         })
         .and_then(map_tool_input);
 
-    let _ = send_event(agent, kind, tool.as_deref(), tool_input.as_ref());
+    // 会话 id 各 agent 命名不一致：Claude Code / WorkBuddy 用 session_id，
+    // Cursor 用 sessionId，部分版本嵌在 session.id 里。多会话时宠物靠它区分。
+    let session_id = parsed.as_ref().and_then(|value| {
+        value
+            .get("session_id")
+            .or_else(|| value.get("sessionId"))
+            .or_else(|| value.get("conversation_id"))
+            .or_else(|| value.get("conversationId"))
+            .or_else(|| value.get("session").and_then(|s| s.get("id")))
+            .and_then(Value::as_str)
+            .filter(|id| !id.is_empty())
+            .map(String::from)
+    });
+
+    let _ = send_event(
+        agent,
+        kind,
+        tool.as_deref(),
+        tool_input.as_ref(),
+        session_id.as_deref(),
+    );
 
     hook_output(agent, kind);
 }
@@ -131,6 +156,7 @@ fn send_event(
     kind: &str,
     tool: Option<&str>,
     tool_input: Option<&Value>,
+    session_id: Option<&str>,
 ) -> Result<(), ()> {
     let runtime_dir = std::env::var_os("COPET_RUNTIME_DIR")
         .map(std::path::PathBuf::from)
@@ -164,6 +190,9 @@ fn send_event(
     }
     if let Some(ti) = tool_input {
         body["toolInput"] = ti.clone();
+    }
+    if let Some(id) = session_id {
+        body["sessionId"] = json!(id);
     }
     let payload = serde_json::to_string(&body).map_err(|_| ())?;
 

@@ -12,7 +12,8 @@ pub(super) static ADAPTER: WorkBuddyAdapter = WorkBuddyAdapter;
 /// WorkBuddy 的用户配置与 Claude Code 一样是带 `hooks` 字段的 `settings.json`：
 /// - 修改文件: `~/.workbuddy/settings.json`
 /// - 改动内容: 仅在 `hooks` 字段中插入 CoPet 自己的条目，沙箱、审批等其它配置原样保留。
-/// - 事件名: `UserPromptSubmit`、`PreToolUse`、`PostToolUse`、`PermissionRequest`、`Notification`、`Stop`。
+/// - 事件名: `UserPromptSubmit`、`PreToolUse`、`PostToolUse`、`PermissionRequest`、`Stop`。
+/// - 注意: 命令由 PortableGit 的 `bash -c` 执行，必须用正斜杠 POSIX 语法（见 `HookShell`）。
 pub(super) struct WorkBuddyAdapter;
 
 const EVENTS: &[HookEvent] = &[
@@ -34,11 +35,6 @@ const EVENTS: &[HookEvent] = &[
     HookEvent {
         cli_event: "PermissionRequest",
         matcher: Some("*"),
-        kind: "permission.waiting",
-    },
-    HookEvent {
-        cli_event: "Notification",
-        matcher: None,
         kind: "permission.waiting",
     },
     HookEvent {

@@ -43,6 +43,11 @@ fn workbuddy_install_merges_hooks_and_uninstall_preserves_user_config() {
         "hook command must use POSIX shell syntax: {command}"
     );
     assert_eq!(value["hooks"]["PreToolUse"][0]["hooks"][0]["timeout"], 5);
+    // Notification 会把「应用就绪」这类普通通知也映射成等待，宠物会莫名显示 Waiting。
+    assert!(
+        value["hooks"].get("Notification").is_none(),
+        "workbuddy hooks must not subscribe to Notification"
+    );
 
     manager.uninstall("workbuddy").unwrap();
     let uninstalled = fs::read_to_string(&settings).unwrap();
