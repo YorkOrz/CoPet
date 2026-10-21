@@ -1,4 +1,7 @@
-use super::helpers::{manager_with_fake_agent_names, manager_with_fake_agents, read_json};
+use super::helpers::{
+    home_path, manager_with_fake_agent_names, manager_with_fake_agents, read_json, run_hook_shell,
+    HELPER_NAME,
+};
 use copet_lib::agents::AgentManager;
 use std::{
     fs,
@@ -27,7 +30,9 @@ fn antigravity_install_writes_global_hooks_entry() {
     assert_eq!(result.adapter.display_name, "Antigravity");
     assert_eq!(
         result.adapter.config_path,
-        home.join(".gemini/config/hooks.json").display().to_string()
+        home_path(&home, ".gemini/config/hooks.json")
+            .display()
+            .to_string()
     );
     assert!(copet["PreToolUse"][0]["matcher"].as_str().unwrap() == "*");
     assert!(copet["PostToolUse"][0]["matcher"].as_str().unwrap() == "*");
@@ -434,25 +439,18 @@ fn antigravity_stop_command_allows_stop_when_helper_is_missing() {
     let manager = manager_with_fake_agents(&root, &home);
 
     manager.install("antigravity").unwrap();
-    fs::remove_file(root.join("hooks/copet-hook.sh")).unwrap();
+    fs::remove_file(root.join("hooks").join(HELPER_NAME)).unwrap();
 
     let hooks = read_json(home.join(".gemini/config/hooks.json"));
     let command = hooks["copet-antigravity"]["Stop"][0]["command"]
         .as_str()
         .unwrap();
-    let output = Command::new("sh")
-        .args(["-c", command])
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn()
-        .unwrap()
-        .wait_with_output()
-        .unwrap();
+    let output = run_hook_shell(command);
 
     assert!(output.status.success());
     assert_eq!(
-        String::from_utf8_lossy(&output.stdout),
-        "{\"decision\":\"allow\"}\n"
+        String::from_utf8_lossy(&output.stdout).trim(),
+        "{\"decision\":\"allow\"}"
     );
 }
 
@@ -510,7 +508,7 @@ fn antigravity_helper_extracts_tool_call_details_from_official_payload() {
         }
     });
 
-    let helper = root.join("hooks/copet-hook.sh");
+    let helper = root.join("hooks").join(HELPER_NAME);
     let mut child = Command::new(helper)
         .args(["antigravity", "tool.before"])
         .env("COPET_RUNTIME_DIR", &runtime)
@@ -547,8 +545,8 @@ fn antigravity_helper_extracts_tool_call_details_from_official_payload() {
     let output = child.wait_with_output().unwrap();
     assert!(output.status.success());
     assert_eq!(
-        String::from_utf8_lossy(&output.stdout),
-        "{\"decision\":\"allow\"}\n"
+        String::from_utf8_lossy(&output.stdout).trim(),
+        "{\"decision\":\"allow\"}"
     );
 
     let request = receiver
@@ -619,7 +617,7 @@ fn antigravity_helper_omits_empty_tool_name_from_payload() {
         }
     });
 
-    let helper = root.join("hooks/copet-hook.sh");
+    let helper = root.join("hooks").join(HELPER_NAME);
     let mut child = Command::new(helper)
         .args(["antigravity", "tool.after"])
         .env("COPET_RUNTIME_DIR", &runtime)
@@ -656,25 +654,18 @@ fn antigravity_pre_tool_command_allows_tool_when_helper_is_missing() {
     let manager = manager_with_fake_agents(&root, &home);
 
     manager.install("antigravity").unwrap();
-    fs::remove_file(root.join("hooks/copet-hook.sh")).unwrap();
+    fs::remove_file(root.join("hooks").join(HELPER_NAME)).unwrap();
 
     let hooks = read_json(home.join(".gemini/config/hooks.json"));
     let command = hooks["copet-antigravity"]["PreToolUse"][0]["hooks"][0]["command"]
         .as_str()
         .unwrap();
-    let output = Command::new("sh")
-        .args(["-c", command])
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn()
-        .unwrap()
-        .wait_with_output()
-        .unwrap();
+    let output = run_hook_shell(command);
 
     assert!(output.status.success());
     assert_eq!(
-        String::from_utf8_lossy(&output.stdout),
-        "{\"decision\":\"allow\"}\n"
+        String::from_utf8_lossy(&output.stdout).trim(),
+        "{\"decision\":\"allow\"}"
     );
 }
 
@@ -687,7 +678,7 @@ fn antigravity_helper_allows_stop_when_runtime_is_unavailable() {
 
     manager.install("antigravity").unwrap();
 
-    let helper = root.join("hooks/copet-hook.sh");
+    let helper = root.join("hooks").join(HELPER_NAME);
     let output = Command::new(helper)
         .args(["antigravity", "session.stop"])
         .stdin(Stdio::piped())
@@ -699,8 +690,8 @@ fn antigravity_helper_allows_stop_when_runtime_is_unavailable() {
 
     assert!(output.status.success());
     assert_eq!(
-        String::from_utf8_lossy(&output.stdout),
-        "{\"decision\":\"allow\"}\n"
+        String::from_utf8_lossy(&output.stdout).trim(),
+        "{\"decision\":\"allow\"}"
     );
 }
 

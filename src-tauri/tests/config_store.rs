@@ -634,6 +634,8 @@ fn install_codex_pet_allows_user_pet_that_shadows_builtin_id() {
     assert!(state.pets.iter().any(|pet| pet.id == "user:dragon"));
 }
 
+// `bad:id` 目录名在 Windows 上无法创建（`:` 是保留字符）。
+#[cfg(unix)]
 #[test]
 fn install_codex_pet_rejects_unsafe_source_storage_id_without_writing() {
     let temp = tempfile::tempdir().unwrap();

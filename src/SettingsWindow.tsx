@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { toast } from "sonner";
 
-import copetLogoUrl from "./assets/logo.png";
+import copetLogoUrl from "./assets/logo.webp";
 import { ErrorView, LoadingView } from "./components/AppShell";
 import { SettingsAboutSection } from "./components/SettingsAboutSection";
 import { SettingsAgentsSection } from "./components/SettingsAgentsSection";

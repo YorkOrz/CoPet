@@ -10,11 +10,11 @@ use std::{
 
 pub(crate) const COPET_MARKER: &str = "copet-managed-hook";
 #[cfg(windows)]
-pub(crate) const HELPER_NAME: &str = "copet-hook.exe";
+pub const HELPER_NAME: &str = "copet-hook.exe";
 #[cfg(not(windows))]
-pub(crate) const HELPER_NAME: &str = "copet-hook.sh";
+pub const HELPER_NAME: &str = "copet-hook.sh";
 
-static ADAPTERS: [&dyn CliAdapter; 8] = [
+static ADAPTERS: [&dyn CliAdapter; 9] = [
     adapters::CLAUDE_CODE,
     adapters::CODEX,
     adapters::ANTIGRAVITY,
@@ -23,6 +23,7 @@ static ADAPTERS: [&dyn CliAdapter; 8] = [
     adapters::COPILOT,
     adapters::PI,
     adapters::GEMINI,
+    adapters::WORKBUDDY,
 ];
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -97,6 +98,22 @@ pub(crate) trait CliAdapter: Sync {
     fn install(&self, manager: &AgentManager) -> Result<(), AdapterError>;
     fn uninstall(&self, manager: &AgentManager) -> Result<(), AdapterError>;
     fn executable_names(&self) -> &'static [&'static str];
+    /// Whether the agent is present on this machine.
+    ///
+    /// Defaults to a PATH lookup. GUI-first agents can override this to also
+    /// accept an existing config directory, because their CLI is not always
+    /// installed as a separate executable.
+    fn is_present(&self, manager: &AgentManager) -> bool {
+        self.executable_names()
+            .iter()
+            .any(|name| manager.executable_exists(name))
+    }
+
+    /// Whether hooks are supported on this platform. Unsupported adapters are
+    /// skipped by auto-install instead of being reported as failures.
+    fn is_supported(&self) -> bool {
+        true
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -211,7 +228,7 @@ impl AgentManager {
 
         for adapter in ADAPTERS {
             let adapter_id = adapter.id().to_string();
-            if !self.adapter_executable_available(adapter) {
+            if !adapter.is_supported() || !self.adapter_executable_available(adapter) {
                 summary.skipped.push(adapter_id);
                 continue;
             }
@@ -252,10 +269,7 @@ impl AgentManager {
     }
 
     fn adapter_executable_available(&self, adapter: &dyn CliAdapter) -> bool {
-        adapter
-            .executable_names()
-            .iter()
-            .any(|name| self.executable_exists(name))
+        adapter.is_present(self)
     }
 
     fn ensure_agent_executable(&self, adapter: &dyn CliAdapter) -> Result<(), AdapterError> {
@@ -268,7 +282,7 @@ impl AgentManager {
         })
     }
 
-    fn executable_exists(&self, name: &str) -> bool {
+    pub(crate) fn executable_exists(&self, name: &str) -> bool {
         executable_candidates(name).iter().any(|candidate| {
             self.executable_search_paths
                 .iter()
@@ -381,6 +395,7 @@ pub(crate) fn install_json_hooks(
     path: &Path,
     events: &[HookEvent],
     timeout: u64,
+    shell: HookShell,
 ) -> Result<(), AdapterError> {
     manager.backup_file(adapter_id, path)?;
     let mut value = read_json_object_optional(path)?.unwrap_or_else(|| json!({}));
@@ -391,6 +406,7 @@ pub(crate) fn install_json_hooks(
         &manager.helper_path(),
         events,
         timeout,
+        shell,
         path,
     )?;
     write_json_atomic(path, &value)?;
@@ -474,7 +490,7 @@ fn hook_group_matches_event(group: &Value, adapter_id: &str, event: &HookEvent) 
                     .get("command")
                     .and_then(Value::as_str)
                     .is_some_and(|command| {
-                        command.contains(HELPER_NAME) && command.contains(&format!(" {adapter_id} {}", event.kind))
+                        command_invokes_copet_helper(command, adapter_id, Some(event.kind))
                     })
             })
         })
@@ -489,7 +505,7 @@ fn hook_group_has_copet_command(group: &Value, adapter_id: &str) -> bool {
                 handler
                     .get("command")
                     .and_then(Value::as_str)
-                    .is_some_and(|command| command.contains(HELPER_NAME) && command.contains(&format!(" {adapter_id} ")))
+                    .is_some_and(|command| is_copet_command(command, adapter_id))
             })
         })
 }
@@ -500,6 +516,7 @@ fn merge_hook_entries(
     helper_path: &Path,
     events: &[HookEvent],
     timeout: u64,
+    shell: HookShell,
     path: &Path,
 ) -> Result<(), AdapterError> {
     let object = value
@@ -514,7 +531,7 @@ fn merge_hook_entries(
         let mut group = json!({
             "hooks": [{
                 "type": "command",
-                "command": hook_command(adapter_id, helper_path, event.kind),
+                "command": hook_command(adapter_id, helper_path, event.kind, shell),
                 "timeout": timeout,
                 "statusMessage": "Updating CoPet"
             }]
@@ -560,37 +577,113 @@ fn remove_copet_hooks(value: &mut Value, adapter_id: &str) {
 }
 
 fn is_copet_command(command: &str, adapter_id: &str) -> bool {
-    (command.contains(HELPER_NAME) || command.contains("copet-hook"))
-        && command.contains(&format!(" {adapter_id} "))
+    command_invokes_copet_helper(command, adapter_id, None)
 }
 
-fn hook_command(adapter_id: &str, helper_path: &Path, kind: &str) -> String {
+/// 判断一条 hook 命令是否确实调用了 CoPet helper，且参数精确匹配。
+///
+/// 只认「helper 可执行文件 + adapter id + kind」这组精确 token：注释里出现的
+/// `copet-hook`、名字带同前缀的别的脚本、或别的 adapter 的调用都不算。
+/// 同时兼容三种写法：
+/// - Unix shell：`if [ -f 'P' ]; then 'P' <id> <kind>; else echo "{}"; fi`
+/// - Windows 裸命令：`"C:\...\copet-hook.exe" <id> <kind>`
+/// - Windows cmd：`if exist "P" ("P" <id> <kind>) else (echo {})`
+pub fn command_invokes_copet_helper(command: &str, adapter_id: &str, kind: Option<&str>) -> bool {
+    copet_helper_invocation(command, adapter_id, kind).is_some()
+}
+
+/// 返回命令里调用的 helper 路径，供需要校验具体安装路径的 adapter 复用。
+fn copet_helper_invocation(command: &str, adapter_id: &str, kind: Option<&str>) -> Option<String> {
+    let tokens = tokenize_command(command);
+    tokens.iter().enumerate().find_map(|(index, token)| {
+        if helper_file_name(token) != Some(HELPER_NAME) {
+            return None;
+        }
+        if tokens.get(index + 1).map(String::as_str) != Some(adapter_id) {
+            return None;
+        }
+        match kind {
+            Some(expected) if tokens.get(index + 2).map(String::as_str) != Some(expected) => None,
+            _ => Some(token.clone()),
+        }
+    })
+}
+
+fn helper_file_name(token: &str) -> Option<&str> {
+    token
+        .rsplit(['/', '\\'])
+        .next()
+        .filter(|name| !name.is_empty())
+}
+
+/// 把 shell 命令切成 token：引号内的路径保持完整，`;`、括号、管道和注释都当分隔符。
+fn tokenize_command(command: &str) -> Vec<String> {
+    fn flush(tokens: &mut Vec<String>, current: &mut String) {
+        if !current.is_empty() {
+            tokens.push(std::mem::take(current));
+        }
+    }
+
+    let mut tokens = Vec::new();
+    let mut current = String::new();
+    let mut chars = command.chars().peekable();
+    let mut in_single = false;
+    let mut in_double = false;
+
+    while let Some(ch) = chars.next() {
+        match ch {
+            '\'' if !in_double => in_single = !in_single,
+            '"' if !in_single => in_double = !in_double,
+            '#' if !in_single && !in_double && current.is_empty() => {
+                for next in chars.by_ref() {
+                    if next == '\n' {
+                        break;
+                    }
+                }
+            }
+            c if !in_single
+                && !in_double
+                && (c.is_whitespace() || matches!(c, ';' | '(' | ')' | '|' | '&')) =>
+            {
+                flush(&mut tokens, &mut current);
+            }
+            _ => current.push(ch),
+        }
+    }
+    flush(&mut tokens, &mut current);
+    tokens
+}
+
+/// hook 命令使用哪种 shell 语法。
+///
+/// Windows 上多数 agent 用 cmd.exe 执行 hook，但 WorkBuddy 的 `HookExecutor` 是用
+/// PortableGit 的 `bash -c` 执行的：裸反斜杠路径会被 bash 当成转义符吃掉，
+/// 变成 `C:UsersAdministrator...` 直接 exit 127。这类 agent 必须用 `Posix`。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum HookShell {
+    /// Windows 上按 cmd.exe 语法生成，其它平台按 POSIX 语法。
+    Cmd,
+    /// 无论什么平台都用 POSIX 语法，并要求路径为正斜杠。
+    Posix,
+}
+
+fn hook_command(adapter_id: &str, helper_path: &Path, kind: &str, shell: HookShell) -> String {
+    let fallback_output = hook_default_output(adapter_id, kind);
+    if shell == HookShell::Posix {
+        return posix_hook_command(adapter_id, helper_path, kind, fallback_output);
+    }
     #[cfg(windows)]
     {
-        // Agent CLIs on Windows run hook commands through a POSIX shell (Git
-        // Bash). A backslash-separated path is parsed as escape sequences
-        // there, collapsing `C:\Users\...` into `C:Users...` and failing with
-        // "command not found". Forward slashes are accepted both by MSYS
-        // shells and by CreateProcess, so emit them.
-        let path = helper_path.to_string_lossy().replace('\\', "/");
-        if path.contains(' ') {
-            format!("\"{path}\" {adapter_id} {kind}")
-        } else {
-            format!("{path} {adapter_id} {kind}")
-        }
+        // cmd.exe 语法：helper 被删除或被杀软隔离时也必须返回约定输出，
+        // 否则 Cursor 的 beforeSubmitPrompt 会拿到空 stdout。
+        let path = helper_path.to_string_lossy();
+        format!(
+            "if exist \"{path}\" (\"{path}\" {adapter_id} {kind}) else (echo {fallback_output})"
+        )
     }
     #[cfg(not(windows))]
     {
-        let path = shell_quote(&helper_path.to_string_lossy());
-        let fallback_output = hook_default_output(adapter_id, kind);
-        if fallback_output == "{}" {
-            format!("if [ -f {path} ]; then {path} {adapter_id} {kind}; else echo \"{{}}\"; fi")
-        } else {
-            let fallback = shell_quote(fallback_output);
-            format!(
-                "if [ -f {path} ]; then {path} {adapter_id} {kind}; else printf '%s\\n' {fallback}; fi"
-            )
-        }
+        posix_hook_command(adapter_id, helper_path, kind, fallback_output)
     }
 }
 
@@ -601,6 +694,26 @@ fn hook_default_output(adapter_id: &str, kind: &str) -> &'static str {
         r#"{"continue":true}"#
     } else {
         "{}"
+    }
+}
+
+/// POSIX shell 版 hook 命令。
+///
+/// 路径统一转成正斜杠：Windows 上 bash 会把 `\` 当转义符，反斜杠路径必然 exit 127。
+fn posix_hook_command(
+    adapter_id: &str,
+    helper_path: &Path,
+    kind: &str,
+    fallback_output: &str,
+) -> String {
+    let path = shell_quote(&helper_path.to_string_lossy().replace('\\', "/"));
+    if fallback_output == "{}" {
+        format!("if [ -f {path} ]; then {path} {adapter_id} {kind}; else echo \"{{}}\"; fi")
+    } else {
+        let fallback = shell_quote(fallback_output);
+        format!(
+            "if [ -f {path} ]; then {path} {adapter_id} {kind}; else printf '%s\\n' {fallback}; fi"
+        )
     }
 }
 
@@ -678,7 +791,15 @@ if [ -n "$tool" ]; then
   escaped_tool="$(json_escape "$tool")"
   tool_field=",\"tool\":\"$escaped_tool\""
 fi
-payload="$(printf '{"agent":"%s","kind":"%s"%s%s}' "$(json_escape "$agent")" "$(json_escape "$kind")" "$tool_field" "$tool_input")"
+session="$(json_string_field session_id)"
+if [ -z "$session" ]; then
+  session="$(json_string_field sessionId)"
+fi
+session_field=""
+if [ -n "$session" ]; then
+  session_field=",\"sessionId\":\"$(json_escape "$session")\""
+fi
+payload="$(printf '{"agent":"%s","kind":"%s"%s%s%s}' "$(json_escape "$agent")" "$(json_escape "$kind")" "$tool_field" "$tool_input" "$session_field")"
 curl -fsS --noproxy '*' --max-time 0.8 -H "Authorization: Bearer $token" -H "Content-Type: application/json" -d "$payload" "$endpoint" >/dev/null 2>&1 || true
 hook_output
 exit 0

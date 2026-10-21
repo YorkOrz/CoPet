@@ -6,7 +6,7 @@ use toml_edit::{value, DocumentMut, Item, Table};
 
 use super::super::{
     install_json_hooks, json_config_has_copet_hook, remove_json_hooks, write_atomic, AdapterError,
-    AgentManager, CliAdapter, HookEvent,
+    AgentManager, CliAdapter, HookEvent, HookShell,
 };
 
 pub(super) static ADAPTER: CodexCliAdapter = CodexCliAdapter;
@@ -71,7 +71,7 @@ impl CliAdapter for CodexCliAdapter {
 
     fn install(&self, manager: &AgentManager) -> Result<(), AdapterError> {
         let hooks_path = self.config_path(manager.home());
-        install_json_hooks(manager, self.id(), &hooks_path, EVENTS, 1)?;
+        install_json_hooks(manager, self.id(), &hooks_path, EVENTS, 1, HookShell::Cmd)?;
         update_codex_config_toml(manager.home(), |document, config_path| {
             set_features_hooks_true(document, config_path)?;
             apply_trusted_hashes(document, &hooks_path, config_path)

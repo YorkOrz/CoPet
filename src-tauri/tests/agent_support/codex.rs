@@ -1,4 +1,4 @@
-use super::helpers::{manager_with_fake_agents, read_json};
+use super::helpers::{home_path, manager_with_fake_agents, read_json, HELPER_NAME};
 use copet_lib::agents::AgentManager;
 use std::{
     fs,
@@ -19,12 +19,12 @@ fn codex_install_writes_hooks_json_and_enables_hooks_feature() {
     let manager = manager_with_fake_agents(&root, &home);
 
     let result = manager.install("codex").unwrap();
-    let hooks = fs::read_to_string(home.join(".codex/hooks.json")).unwrap();
-    let config = fs::read_to_string(home.join(".codex/config.toml")).unwrap();
+    let hooks = fs::read_to_string(home_path(&home, ".codex/hooks.json")).unwrap();
+    let config = fs::read_to_string(home_path(&home, ".codex/config.toml")).unwrap();
 
     assert!(result.adapter.installed);
     assert!(hooks.contains("\"PreToolUse\""));
-    assert!(hooks.contains("copet-hook.sh"));
+    assert!(hooks.contains(HELPER_NAME));
     assert!(hooks.contains("codex"));
     assert!(hooks.contains("tool.before"));
     assert!(config.contains("[features]"));
@@ -39,7 +39,7 @@ fn codex_install_omits_notification_event_unknown_to_codex() {
     let manager = manager_with_fake_agents(&root, &home);
 
     manager.install("codex").unwrap();
-    let hooks = fs::read_to_string(home.join(".codex/hooks.json")).unwrap();
+    let hooks = fs::read_to_string(home_path(&home, ".codex/hooks.json")).unwrap();
 
     assert!(
         !hooks.contains("\"Notification\""),
@@ -113,7 +113,7 @@ fn codex_helper_bypasses_loopback_proxy_when_posting_runtime_events() {
         }
     });
 
-    let helper = root.join("hooks/copet-hook.sh");
+    let helper = root.join("hooks").join(HELPER_NAME);
     let mut child = Command::new(helper)
         .args(["codex", "tool.before"])
         .env("COPET_RUNTIME_DIR", &runtime)
@@ -158,7 +158,7 @@ fn codex_helper_outputs_schema_neutral_json_when_runtime_is_unavailable() {
 
     manager.install("codex").unwrap();
 
-    let output = Command::new(root.join("hooks/copet-hook.sh"))
+    let output = Command::new(root.join("hooks").join(HELPER_NAME))
         .args(["codex", "session.stop"])
         .env("COPET_RUNTIME_DIR", &runtime)
         .stdin(Stdio::piped())
@@ -177,7 +177,7 @@ fn codex_install_preserves_existing_config_while_enabling_hooks_feature() {
     let temp = tempfile::tempdir().unwrap();
     let home = temp.path().join("home");
     let root = temp.path().join(".copet");
-    let config = home.join(".codex/config.toml");
+    let config = home_path(&home, ".codex/config.toml");
     fs::create_dir_all(config.parent().unwrap()).unwrap();
     fs::write(
         &config,
@@ -210,7 +210,7 @@ fn codex_install_rejects_non_table_features_without_panicking() {
     let temp = tempfile::tempdir().unwrap();
     let home = temp.path().join("home");
     let root = temp.path().join(".copet");
-    let config = home.join(".codex/config.toml");
+    let config = home_path(&home, ".codex/config.toml");
     fs::create_dir_all(config.parent().unwrap()).unwrap();
     fs::write(&config, "features = true\n").unwrap();
     let manager = manager_with_fake_agents(&root, &home);
@@ -225,7 +225,7 @@ fn codex_install_rejects_non_table_hooks_state_without_panicking() {
     let temp = tempfile::tempdir().unwrap();
     let home = temp.path().join("home");
     let root = temp.path().join(".copet");
-    let config = home.join(".codex/config.toml");
+    let config = home_path(&home, ".codex/config.toml");
     fs::create_dir_all(config.parent().unwrap()).unwrap();
     fs::write(&config, "[hooks]\nstate = true\n").unwrap();
     let manager = manager_with_fake_agents(&root, &home);
@@ -240,7 +240,7 @@ fn codex_install_places_copet_hooks_before_existing_matching_groups() {
     let temp = tempfile::tempdir().unwrap();
     let home = temp.path().join("home");
     let root = temp.path().join(".copet");
-    let hooks = home.join(".codex/hooks.json");
+    let hooks = home_path(&home, ".codex/hooks.json");
     fs::create_dir_all(hooks.parent().unwrap()).unwrap();
     fs::write(
         &hooks,
@@ -255,7 +255,7 @@ fn codex_install_places_copet_hooks_before_existing_matching_groups() {
     let pre_tool_use = value["hooks"]["PreToolUse"].as_array().unwrap();
     let first_command = pre_tool_use[0]["hooks"][0]["command"].as_str().unwrap();
     let second_command = pre_tool_use[1]["hooks"][0]["command"].as_str().unwrap();
-    assert!(first_command.contains("copet-hook.sh"));
+    assert!(first_command.contains(HELPER_NAME));
     assert!(first_command.contains(" codex tool.before"));
     assert_eq!(second_command, "echo existing");
 }
@@ -271,10 +271,10 @@ fn uninstall_removes_hooks_and_adapter_metadata() {
     assert!(root.join("adapters/codex.json").exists());
 
     let result = manager.uninstall("codex").unwrap();
-    let hooks = fs::read_to_string(home.join(".codex/hooks.json")).unwrap();
+    let hooks = fs::read_to_string(home_path(&home, ".codex/hooks.json")).unwrap();
 
     assert!(!result.adapter.installed);
-    assert!(!hooks.contains("copet-hook.sh"));
+    assert!(!hooks.contains(HELPER_NAME));
     assert!(!root.join("adapters/codex.json").exists());
 }
 
@@ -289,7 +289,7 @@ fn install_rejects_missing_local_agent_cli_without_writing_hooks() {
 
     assert!(error.contains("Codex"));
     assert!(error.contains("not installed"));
-    assert!(!home.join(".codex/hooks.json").exists());
+    assert!(!home_path(&home, ".codex/hooks.json").exists());
     assert!(!root.join("adapters/codex.json").exists());
 }
 
@@ -298,7 +298,7 @@ fn install_finds_agent_cli_in_common_user_bin_paths_when_process_path_is_sparse(
     let temp = tempfile::tempdir().unwrap();
     let home = temp.path().join("home");
     let root = temp.path().join(".copet");
-    let local_bin = home.join(".local/bin");
+    let local_bin = home_path(&home, ".local/bin");
     fs::create_dir_all(&local_bin).unwrap();
     let codex = local_bin.join("codex");
     fs::write(&codex, "#!/bin/sh\nexit 0\n").unwrap();
@@ -314,7 +314,7 @@ fn install_finds_agent_cli_in_common_user_bin_paths_when_process_path_is_sparse(
     let result = manager.install("codex").unwrap();
 
     assert!(result.adapter.installed);
-    assert!(home.join(".codex/hooks.json").exists());
+    assert!(home_path(&home, ".codex/hooks.json").exists());
 }
 
 #[test]
@@ -322,7 +322,7 @@ fn install_finds_codex_in_macos_pnpm_global_bin_when_process_path_is_sparse() {
     let temp = tempfile::tempdir().unwrap();
     let home = temp.path().join("home");
     let root = temp.path().join(".copet");
-    let pnpm_bin = home.join("Library/pnpm");
+    let pnpm_bin = home_path(&home, "Library/pnpm");
     fs::create_dir_all(&pnpm_bin).unwrap();
     let codex = pnpm_bin.join("codex");
     fs::write(&codex, "#!/bin/sh\nexit 0\n").unwrap();
@@ -338,7 +338,7 @@ fn install_finds_codex_in_macos_pnpm_global_bin_when_process_path_is_sparse() {
     let result = manager.install("codex").unwrap();
 
     assert!(result.adapter.installed);
-    assert!(home.join(".codex/hooks.json").exists());
+    assert!(home_path(&home, ".codex/hooks.json").exists());
 }
 
 #[test]
@@ -346,7 +346,7 @@ fn codex_install_preserves_user_comments_and_unrelated_keys_in_config_toml() {
     let temp = tempfile::tempdir().unwrap();
     let home = temp.path().join("home");
     let root = temp.path().join(".copet");
-    let config = home.join(".codex/config.toml");
+    let config = home_path(&home, ".codex/config.toml");
     fs::create_dir_all(config.parent().unwrap()).unwrap();
     fs::write(
         &config,
@@ -397,9 +397,11 @@ fn codex_install_writes_trusted_hashes_for_all_copet_hooks() {
 
     manager.install("codex").unwrap();
 
-    let config = fs::read_to_string(home.join(".codex/config.toml")).unwrap();
-    let hooks_path = home.join(".codex/hooks.json");
+    let config = fs::read_to_string(home_path(&home, ".codex/config.toml")).unwrap();
+    let hooks_path = home_path(&home, ".codex/hooks.json");
+    // 路径含反斜杠时 toml_edit 会写成字面量字符串（单引号包住整个 key），否则用基本字符串。
     let hooks_abs = hooks_path.display().to_string();
+    let hooks_quote = if hooks_abs.contains('\\') { '\'' } else { '"' };
     let sha_re = regex_lite_match_sha256;
 
     for event_label in [
@@ -409,10 +411,12 @@ fn codex_install_writes_trusted_hashes_for_all_copet_hooks() {
         "permission_request",
         "stop",
     ] {
-        let header = format!("[hooks.state.\"{hooks_abs}:{event_label}:0:0\"]");
+        let header =
+            format!("[hooks.state.{hooks_quote}{hooks_abs}:{event_label}:0:0{hooks_quote}]");
         assert!(
             config.contains(&header),
-            "missing trust entry header `{header}` in:\n{config}",
+            "missing trust entry header `{header}` in:\n{config}\nhooks.json:\n{}",
+            fs::read_to_string(&hooks_path).unwrap_or_default(),
         );
         let trusted_hash = config
             .lines()
@@ -451,14 +455,14 @@ fn codex_uninstall_removes_only_copet_trusted_hashes() {
     manager.install("codex").unwrap();
 
     // Inject an unrelated [hooks.state] entry the user might own.
-    let config_path = home.join(".codex/config.toml");
+    let config_path = home_path(&home, ".codex/config.toml");
     let mut config = fs::read_to_string(&config_path).unwrap();
     config.push_str("\n[hooks.state.\"/elsewhere/hooks.json:pre_tool_use:0:0\"]\ntrusted_hash = \"sha256:deadbeef\"\n");
     fs::write(&config_path, &config).unwrap();
 
     manager.uninstall("codex").unwrap();
     let after = fs::read_to_string(&config_path).unwrap();
-    let hooks_abs = home.join(".codex/hooks.json").display().to_string();
+    let hooks_abs = home_path(&home, ".codex/hooks.json").display().to_string();
 
     // CoPet's entries gone.
     for event_label in [
@@ -489,9 +493,9 @@ fn codex_install_idempotent_trusted_hashes_stable_across_runs() {
     let manager = manager_with_fake_agents(&root, &home);
 
     manager.install("codex").unwrap();
-    let first = fs::read_to_string(home.join(".codex/config.toml")).unwrap();
+    let first = fs::read_to_string(home_path(&home, ".codex/config.toml")).unwrap();
     manager.install("codex").unwrap();
-    let second = fs::read_to_string(home.join(".codex/config.toml")).unwrap();
+    let second = fs::read_to_string(home_path(&home, ".codex/config.toml")).unwrap();
 
     assert_eq!(
         first, second,
@@ -508,12 +512,12 @@ fn codex_repair_refreshes_trusted_hashes_after_helper_path_changes() {
 
     let manager_a = manager_with_fake_agents(&root_a, &home);
     manager_a.install("codex").unwrap();
-    let config_after_a = fs::read_to_string(home.join(".codex/config.toml")).unwrap();
+    let config_after_a = fs::read_to_string(home_path(&home, ".codex/config.toml")).unwrap();
     let hash_a = extract_first_trusted_hash(&config_after_a);
 
     let manager_b = manager_with_fake_agents(&root_b, &home);
     manager_b.repair("codex").unwrap();
-    let config_after_b = fs::read_to_string(home.join(".codex/config.toml")).unwrap();
+    let config_after_b = fs::read_to_string(home_path(&home, ".codex/config.toml")).unwrap();
     let hash_b = extract_first_trusted_hash(&config_after_b);
 
     assert_ne!(
@@ -578,8 +582,8 @@ fn codex_trusted_hash_matches_golden_for_pinned_fixture() {
 
     manager.install("codex").unwrap();
 
-    let config = fs::read_to_string(home.join(".codex/config.toml")).unwrap();
-    let hooks_abs = home.join(".codex/hooks.json").display().to_string();
+    let config = fs::read_to_string(home_path(&home, ".codex/config.toml")).unwrap();
+    let hooks_abs = home_path(&home, ".codex/hooks.json").display().to_string();
 
     for (event_label, expected_hash) in GOLDEN {
         let header = format!("[hooks.state.\"{hooks_abs}:{event_label}:0:0\"]");

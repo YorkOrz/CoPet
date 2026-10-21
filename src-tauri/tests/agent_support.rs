@@ -10,6 +10,8 @@ mod claude_code;
 #[path = "agent_support/codex.rs"]
 mod codex;
 
+// Copilot CLI 的 adapter 在 Windows 上返回 UnsupportedPlatform，整组用例只对 unix 有意义。
+#[cfg(unix)]
 #[path = "agent_support/copilot.rs"]
 mod copilot;
 
@@ -27,3 +29,6 @@ mod opencode;
 
 #[path = "agent_support/pi.rs"]
 mod pi;
+
+#[path = "agent_support/workbuddy.rs"]
+mod workbuddy;

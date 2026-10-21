@@ -180,6 +180,7 @@ pub fn canonical_agent_id(agent: &str) -> Option<&'static str> {
         "cursor-agent" | "cursor_agent" | "cursoragent" => Some("cursor"),
         "open-code" | "open_code" => Some("opencode"),
         "pi-agent" | "pi_agent" | "piagent" => Some("pi"),
+        "work-buddy" | "work_buddy" => Some("workbuddy"),
         _ => None,
     }
 }
@@ -214,6 +215,7 @@ pub fn agent_display_name(agent: &str) -> &str {
         "gemini" => "Gemini",
         "opencode" => "OpenCode",
         "pi" => "Pi",
+        "workbuddy" => "WorkBuddy",
         _ => agent,
     }
 }
@@ -259,7 +261,11 @@ fn map_event_to_state(event: &RuntimeEvent) -> Option<PetStateId> {
         }
         "tool.before"
             if matches!(
-                event.tool.as_deref().map(|s| s.to_ascii_lowercase()).as_deref(),
+                event
+                    .tool
+                    .as_deref()
+                    .map(|s| s.to_ascii_lowercase())
+                    .as_deref(),
                 Some("ask_question" | "askquestion" | "question" | "request_user_input")
             ) =>
         {

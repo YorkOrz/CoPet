@@ -1,10 +1,13 @@
-use super::helpers::{manager_with_fake_agent_names, manager_with_fake_agents, read_json};
+use super::helpers::{
+    home_path, hook_shell, manager_with_fake_agent_names, manager_with_fake_agents, read_json,
+    run_hook_shell, HELPER_NAME,
+};
 use serde_json::json;
 use std::{
     fs,
     io::{Read, Write},
     net::TcpListener,
-    process::{Command, Stdio},
+    process::Stdio,
     sync::mpsc,
     time::{Duration, Instant},
 };
@@ -23,7 +26,7 @@ fn cursor_install_merges_user_hooks() {
     let temp = tempfile::tempdir().unwrap();
     let home = temp.path().join("home");
     let root = temp.path().join(".copet");
-    let hooks_path = home.join(".cursor/hooks.json");
+    let hooks_path = home_path(&home, ".cursor/hooks.json");
     fs::create_dir_all(hooks_path.parent().unwrap()).unwrap();
     fs::write(
         &hooks_path,
@@ -57,8 +60,7 @@ fn cursor_install_merges_user_hooks() {
         assert!(
             entries.iter().any(|entry| {
                 entry["command"].as_str().is_some_and(|command| {
-                    command.contains("copet-hook.sh")
-                        && command.contains(&format!(" cursor {kind}"))
+                    command.contains(HELPER_NAME) && command.contains(&format!(" cursor {kind}"))
                 })
             }),
             "{event} missing CoPet hook"
@@ -77,7 +79,7 @@ fn cursor_install_is_idempotent_and_repair_keeps_one_copet_entry_per_event() {
     manager.install("cursor").unwrap();
     manager.repair("cursor").unwrap();
 
-    let hooks = read_json(home.join(".cursor/hooks.json"));
+    let hooks = read_json(home_path(&home, ".cursor/hooks.json"));
     for (event, kind) in EVENTS {
         let count = hooks["hooks"][event]
             .as_array()
@@ -85,8 +87,7 @@ fn cursor_install_is_idempotent_and_repair_keeps_one_copet_entry_per_event() {
             .iter()
             .filter(|entry| {
                 entry["command"].as_str().is_some_and(|command| {
-                    command.contains("copet-hook.sh")
-                        && command.contains(&format!(" cursor {kind}"))
+                    command.contains(HELPER_NAME) && command.contains(&format!(" cursor {kind}"))
                 })
             })
             .count();
@@ -104,7 +105,7 @@ fn cursor_install_accepts_cursor_agent_executable() {
     let result = manager.install("cursor").unwrap();
 
     assert!(result.adapter.installed);
-    assert!(home.join(".cursor/hooks.json").exists());
+    assert!(home_path(&home, ".cursor/hooks.json").exists());
 }
 
 #[test]
@@ -137,7 +138,7 @@ fn assert_cursor_install_detection_for_root_dir_name(root_dir_name: &str) {
     let uninstalled = manager.uninstall("cursor").unwrap();
     assert!(!uninstalled.adapter.installed);
 
-    let hooks = read_json(home.join(".cursor/hooks.json"));
+    let hooks = read_json(home_path(&home, ".cursor/hooks.json"));
     assert!(!hooks.to_string().contains("copet-hook.sh"));
 }
 
@@ -158,20 +159,27 @@ fn cursor_stale_helper_path_is_not_installed_and_install_repairs_it() {
     let repaired = current_manager.install("cursor").unwrap();
     assert!(repaired.adapter.installed);
 
-    let hooks = read_json(home.join(".cursor/hooks.json"));
+    let hooks = read_json(home_path(&home, ".cursor/hooks.json"));
     let serialized = hooks.to_string();
-    assert!(serialized.contains(
+    // 序列化后的 JSON 会把 Windows 路径里的反斜杠再转义一层。
+    let expected = serde_json::to_string(
         &current_root
-            .join("hooks/copet-hook.sh")
+            .join("hooks")
+            .join(HELPER_NAME)
             .to_string_lossy()
-            .to_string()
-    ));
-    assert!(!serialized.contains(
+            .to_string(),
+    )
+    .unwrap();
+    let stale = serde_json::to_string(
         &stale_root
-            .join("hooks/copet-hook.sh")
+            .join("hooks")
+            .join(HELPER_NAME)
             .to_string_lossy()
-            .to_string()
-    ));
+            .to_string(),
+    )
+    .unwrap();
+    assert!(serialized.contains(expected.trim_matches('"')));
+    assert!(!serialized.contains(stale.trim_matches('"')));
 }
 
 #[test]
@@ -179,7 +187,7 @@ fn cursor_uninstall_removes_only_copet_hooks() {
     let temp = tempfile::tempdir().unwrap();
     let home = temp.path().join("home");
     let root = temp.path().join(".copet");
-    let hooks_path = home.join(".cursor/hooks.json");
+    let hooks_path = home_path(&home, ".cursor/hooks.json");
     fs::create_dir_all(hooks_path.parent().unwrap()).unwrap();
     fs::write(
         &hooks_path,
@@ -205,7 +213,7 @@ fn cursor_uninstall_removes_only_copet_hooks() {
         .iter()
         .any(|entry| entry["command"] == "./user-hook.sh"));
     let serialized = hooks.to_string();
-    assert!(!serialized.contains("copet-hook.sh"));
+    assert!(!serialized.contains(HELPER_NAME));
     assert!(!root.join("adapters/cursor.json").exists());
 }
 
@@ -214,7 +222,7 @@ fn cursor_uninstall_preserves_forged_mentions_and_unmanaged_events() {
     let temp = tempfile::tempdir().unwrap();
     let home = temp.path().join("home");
     let root = temp.path().join(".copet");
-    let hooks_path = home.join(".cursor/hooks.json");
+    let hooks_path = home_path(&home, ".cursor/hooks.json");
     fs::create_dir_all(hooks_path.parent().unwrap()).unwrap();
     fs::write(
         &hooks_path,
@@ -256,7 +264,7 @@ fn cursor_install_rejects_non_object_hooks_without_panicking() {
     let temp = tempfile::tempdir().unwrap();
     let home = temp.path().join("home");
     let root = temp.path().join(".copet");
-    let hooks_path = home.join(".cursor/hooks.json");
+    let hooks_path = home_path(&home, ".cursor/hooks.json");
     fs::create_dir_all(hooks_path.parent().unwrap()).unwrap();
     fs::write(
         &hooks_path,
@@ -279,7 +287,7 @@ fn cursor_install_rejects_non_array_event_hooks_without_panicking() {
     let temp = tempfile::tempdir().unwrap();
     let home = temp.path().join("home");
     let root = temp.path().join(".copet");
-    let hooks_path = home.join(".cursor/hooks.json");
+    let hooks_path = home_path(&home, ".cursor/hooks.json");
     fs::create_dir_all(hooks_path.parent().unwrap()).unwrap();
     fs::write(
         &hooks_path,
@@ -307,23 +315,16 @@ fn cursor_before_submit_prompt_outputs_continue_when_helper_is_missing() {
     let manager = manager_with_fake_agents(&root, &home);
 
     manager.install("cursor").unwrap();
-    fs::remove_file(root.join("hooks/copet-hook.sh")).unwrap();
+    fs::remove_file(root.join("hooks").join(HELPER_NAME)).unwrap();
 
-    let hooks = read_json(home.join(".cursor/hooks.json"));
+    let hooks = read_json(home_path(&home, ".cursor/hooks.json"));
     let command = copet_command(&hooks, "beforeSubmitPrompt");
-    let output = Command::new("sh")
-        .args(["-c", command])
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn()
-        .unwrap()
-        .wait_with_output()
-        .unwrap();
+    let output = run_hook_shell(command);
 
     assert!(output.status.success());
     assert_eq!(
-        String::from_utf8_lossy(&output.stdout),
-        "{\"continue\":true}\n"
+        String::from_utf8_lossy(&output.stdout).trim(),
+        "{\"continue\":true}"
     );
 }
 
@@ -379,10 +380,9 @@ fn cursor_pre_tool_command_posts_tool_input_summary() {
         }
     });
 
-    let hooks = read_json(home.join(".cursor/hooks.json"));
+    let hooks = read_json(home_path(&home, ".cursor/hooks.json"));
     let command = copet_command(&hooks, "preToolUse");
-    let mut child = Command::new("sh")
-        .args(["-c", command])
+    let mut child = hook_shell(command)
         .env("COPET_RUNTIME_DIR", &runtime)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -399,7 +399,7 @@ fn cursor_pre_tool_command_posts_tool_input_summary() {
         .unwrap();
     let output = child.wait_with_output().unwrap();
     assert!(output.status.success());
-    assert_eq!(String::from_utf8_lossy(&output.stdout), "{}\n");
+    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "{}");
 
     let request = receiver
         .recv_timeout(Duration::from_secs(11))
@@ -421,7 +421,7 @@ fn copet_command<'a>(hooks: &'a serde_json::Value, event: &str) -> &'a str {
         .find_map(|entry| {
             entry["command"]
                 .as_str()
-                .filter(|command| command.contains("copet-hook.sh"))
+                .filter(|command| command.contains(HELPER_NAME))
         })
         .unwrap()
 }

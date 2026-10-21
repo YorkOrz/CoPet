@@ -4,7 +4,7 @@ use serde_json::{json, Value};
 
 use super::super::{
     hook_command, read_json_object_optional, read_json_object_required, write_json_atomic,
-    AdapterError, AgentManager, CliAdapter,
+    AdapterError, AgentManager, CliAdapter, HookShell,
 };
 
 pub(super) static ADAPTER: AntigravityAdapter = AntigravityAdapter;
@@ -110,7 +110,7 @@ fn antigravity_hook_entry(adapter_id: &str, helper_path: &Path) -> Value {
     let mut entry = serde_json::Map::new();
 
     for event in EVENTS {
-        let command = hook_command(adapter_id, helper_path, event.kind);
+        let command = hook_command(adapter_id, helper_path, event.kind, HookShell::Cmd);
         let handler = json!({
             "type": "command",
             "command": command,
@@ -174,10 +174,5 @@ fn handlers_have_copet_kind(handlers: &[Value], adapter_id: &str, kind: &str) ->
 }
 
 fn is_antigravity_copet_command(command: &str, adapter_id: &str, kind: &str) -> bool {
-    let target = format!("{adapter_id} {kind}");
-    if !command.contains(&target) {
-        return false;
-    }
-    command.contains("copet-hook")
+    super::super::command_invokes_copet_helper(command, adapter_id, Some(kind))
 }
-

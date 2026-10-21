@@ -1,11 +1,11 @@
 <div align="center">
-  <img src="./public/pet.png" alt="CoPet logo" width="120" />
+  <img src="./docs/media/pet.png" alt="CoPet logo" width="120" />
   <h1>CoPet</h1>
   <p><strong>A living desktop companion for every AI Agent.</strong></p>
-  <p>Powered by Codex-compatible pet packages, CoPet reacts in real time to Claude Code, Codex, Antigravity, OpenCode, Cursor, Copilot CLI, Pi, and Gemini, turning prompts, tool use, waiting, and completions into lively pet reactions on your desktop.</p>
+  <p>Powered by Codex-compatible pet packages, CoPet reacts in real time to Claude Code, Codex, Antigravity, OpenCode, Cursor, Copilot CLI, Pi, Gemini, and WorkBuddy, turning prompts, tool use, waiting, and completions into lively pet reactions on your desktop.</p>
 </div>
 
-![CoPet](./public/banner.png)
+![CoPet](./docs/media/banner.png)
 
 [简体中文](./README.zh.md)
 
@@ -15,39 +15,39 @@ Built with Tauri, Rust, and React. Lightweight, local-first, no cloud.
 
 <table>
   <tr>
-    <td align="center"><img src="./public/pets/copet-neo.gif" width="96" alt="CoPet Neo"><br><sub>CoPet Neo</sub></td>
-    <td align="center"><img src="./public/pets/copet-nia.gif" width="96" alt="CoPet Nia"><br><sub>CoPet Nia</sub></td>
-    <td align="center"><img src="./public/pets/copet-mecha.gif" width="96" alt="CoPet Mecha"><br><sub>CoPet Mecha</sub></td>
-    <td align="center"><img src="./public/pets/dj-fuzz.gif" width="96" alt="DJ Fuzz"><br><sub>DJ Fuzz</sub></td>
-    <td align="center"><img src="./public/pets/dog.gif" width="96" alt="Lucky Dog"><br><sub>Lucky Dog</sub></td>
+    <td align="center"><img src="./docs/media/pets/copet-neo.gif" width="96" alt="CoPet Neo"><br><sub>CoPet Neo</sub></td>
+    <td align="center"><img src="./docs/media/pets/copet-nia.gif" width="96" alt="CoPet Nia"><br><sub>CoPet Nia</sub></td>
+    <td align="center"><img src="./docs/media/pets/copet-mecha.gif" width="96" alt="CoPet Mecha"><br><sub>CoPet Mecha</sub></td>
+    <td align="center"><img src="./docs/media/pets/dj-fuzz.gif" width="96" alt="DJ Fuzz"><br><sub>DJ Fuzz</sub></td>
+    <td align="center"><img src="./docs/media/pets/dog.gif" width="96" alt="Lucky Dog"><br><sub>Lucky Dog</sub></td>
   </tr>
   <tr>
-    <td align="center"><img src="./public/pets/dragon.gif" width="96" alt="Azure Dragon"><br><sub>Azure Dragon</sub></td>
-    <td align="center"><img src="./public/pets/duck.gif" width="96" alt="Waddly Duck"><br><sub>Waddly Duck</sub></td>
-    <td align="center"><img src="./public/pets/goat.gif" width="96" alt="Cloud Goat"><br><sub>Cloud Goat</sub></td>
-    <td align="center"><img src="./public/pets/goku.gif" width="96" alt="Goku"><br><sub>Goku</sub></td>
-    <td align="center"><img src="./public/pets/horse.gif" width="96" alt="Chestnut Horse"><br><sub>Chestnut Horse</sub></td>
+    <td align="center"><img src="./docs/media/pets/dragon.gif" width="96" alt="Azure Dragon"><br><sub>Azure Dragon</sub></td>
+    <td align="center"><img src="./docs/media/pets/duck.gif" width="96" alt="Waddly Duck"><br><sub>Waddly Duck</sub></td>
+    <td align="center"><img src="./docs/media/pets/goat.gif" width="96" alt="Cloud Goat"><br><sub>Cloud Goat</sub></td>
+    <td align="center"><img src="./docs/media/pets/goku.gif" width="96" alt="Goku"><br><sub>Goku</sub></td>
+    <td align="center"><img src="./docs/media/pets/horse.gif" width="96" alt="Chestnut Horse"><br><sub>Chestnut Horse</sub></td>
   </tr>
   <tr>
-    <td align="center"><img src="./public/pets/monkey.gif" width="96" alt="Clever Monkey"><br><sub>Clever Monkey</sub></td>
-    <td align="center"><img src="./public/pets/orange-cat.gif" width="96" alt="Orange Cat"><br><sub>Orange Cat</sub></td>
-    <td align="center"><img src="./public/pets/ox.gif" width="96" alt="Cream Ox"><br><sub>Cream Ox</sub></td>
-    <td align="center"><img src="./public/pets/panda.gif" width="96" alt="Panda"><br><sub>Panda</sub></td>
-    <td align="center"><img src="./public/pets/pig.gif" width="96" alt="Blush Pig"><br><sub>Blush Pig</sub></td>
+    <td align="center"><img src="./docs/media/pets/monkey.gif" width="96" alt="Clever Monkey"><br><sub>Clever Monkey</sub></td>
+    <td align="center"><img src="./docs/media/pets/orange-cat.gif" width="96" alt="Orange Cat"><br><sub>Orange Cat</sub></td>
+    <td align="center"><img src="./docs/media/pets/ox.gif" width="96" alt="Cream Ox"><br><sub>Cream Ox</sub></td>
+    <td align="center"><img src="./docs/media/pets/panda.gif" width="96" alt="Panda"><br><sub>Panda</sub></td>
+    <td align="center"><img src="./docs/media/pets/pig.gif" width="96" alt="Blush Pig"><br><sub>Blush Pig</sub></td>
   </tr>
   <tr>
-    <td align="center"><img src="./public/pets/rabbit.gif" width="96" alt="White Rabbit"><br><sub>White Rabbit</sub></td>
-    <td align="center"><img src="./public/pets/rat.gif" width="96" alt="Pearl Rat"><br><sub>Pearl Rat</sub></td>
-    <td align="center"><img src="./public/pets/rooster.gif" width="96" alt="Golden Rooster"><br><sub>Golden Rooster</sub></td>
-    <td align="center"><img src="./public/pets/snake.gif" width="96" alt="Jade Snake"><br><sub>Jade Snake</sub></td>
-    <td align="center"><img src="./public/pets/tiger.gif" width="96" alt="Striped Tiger"><br><sub>Striped Tiger</sub></td>
+    <td align="center"><img src="./docs/media/pets/rabbit.gif" width="96" alt="White Rabbit"><br><sub>White Rabbit</sub></td>
+    <td align="center"><img src="./docs/media/pets/rat.gif" width="96" alt="Pearl Rat"><br><sub>Pearl Rat</sub></td>
+    <td align="center"><img src="./docs/media/pets/rooster.gif" width="96" alt="Golden Rooster"><br><sub>Golden Rooster</sub></td>
+    <td align="center"><img src="./docs/media/pets/snake.gif" width="96" alt="Jade Snake"><br><sub>Jade Snake</sub></td>
+    <td align="center"><img src="./docs/media/pets/tiger.gif" width="96" alt="Striped Tiger"><br><sub>Striped Tiger</sub></td>
   </tr>
 </table>
 
 ## Features
 
 - Real-time pet reactions to Agent prompts, tool use, waiting, completion, and errors.
-- Integrations for Claude Code, Codex, Antigravity, OpenCode, Cursor, Copilot CLI, Pi, and Gemini.
+- Integrations for Claude Code, Codex, Antigravity, OpenCode, Cursor, Copilot CLI, Pi, Gemini, and WorkBuddy.
 - Built-in pets plus import support for Codex-compatible pet packages.
 - Rich pet interactions: hover, click, double-click, rapid-click petting, long-press, drag reactions, and native context menu.
 - Global and per-pet sound packs for interactions and Agent states.
@@ -113,6 +113,9 @@ Restart Codex if the newly installed Skills do not appear.
 | Copilot CLI | JSON hook file | `~/.copilot/hooks/copet.json` |
 | Pi | TypeScript extension | `~/.pi/agent/extensions/copet/index.ts` |
 | Gemini | JSON hooks | `~/.gemini/settings.json` |
+| WorkBuddy | JSON hooks | `~/.workbuddy/settings.json` |
+
+WorkBuddy snapshots its hook configuration when a session starts. Restart WorkBuddy after toggling the integration, and confirm the CoPet entries if it asks you to review new hooks.
 
 ## Getting started
 

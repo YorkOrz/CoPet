@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use super::super::{
     install_json_hooks, json_config_has_copet_hook, remove_json_hooks, AdapterError, AgentManager,
-    CliAdapter, HookEvent,
+    CliAdapter, HookEvent, HookShell,
 };
 
 pub(super) static ADAPTER: ClaudeCodeAdapter = ClaudeCodeAdapter;
@@ -71,12 +71,17 @@ impl CliAdapter for ClaudeCodeAdapter {
     }
 
     fn install(&self, manager: &AgentManager) -> Result<(), AdapterError> {
+        // Claude Code 在所有平台上都用 POSIX shell 执行 hook，Windows 上走
+        // Git Bash：反斜杠路径会被当成转义符吃掉（实测 exit 127），必须给
+        // 正斜杠的 POSIX 语法。超时给 5s：bash 冷启动 + helper 等 stdin EOF
+        // 接近 1s，沿用 1s 会被直接杀掉。
         install_json_hooks(
             manager,
             self.id(),
             &self.config_path(manager.home()),
             EVENTS,
-            1,
+            5,
+            HookShell::Posix,
         )
     }
 

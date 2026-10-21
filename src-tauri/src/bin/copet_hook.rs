@@ -12,64 +12,87 @@ fn main() {
     let agent = args.get(1).map(|s| s.as_str()).unwrap_or("antigravity");
     let kind = args.get(2).map(|s| s.as_str()).unwrap_or("unknown");
 
-    // Read stdin with 150ms timeout so it never blocks
+    // hook 执行器写完 stdin 会关闭管道，正常路径立刻拿到 EOF；超时只是兜底，
+    // 放宽到 1.5s，避免 Windows 上进程调度慢时把 payload 截断。
     let (tx, rx) = mpsc::channel();
     thread::spawn(move || {
         let mut buf = String::new();
         let _ = std::io::stdin().read_to_string(&mut buf);
         let _ = tx.send(buf);
     });
-    let input = rx.recv_timeout(Duration::from_millis(150)).unwrap_or_default();
+    let input = rx
+        .recv_timeout(Duration::from_millis(1500))
+        .unwrap_or_default();
+
+    // 排查用：COPET_HOOK_DEBUG 指向一个文件路径时，把原始 payload 落盘。
+    if let Some(path) = env::var_os("COPET_HOOK_DEBUG") {
+        let _ = fs::write(path, &input);
+    }
 
     let parsed: Option<Value> = serde_json::from_str(&input).ok();
 
-    let tool_name = parsed.as_ref().and_then(|v| {
-        v.get("tool_name")
-            .or_else(|| v.get("toolName"))
-            .or_else(|| v.get("tool"))
-            .or_else(|| v.get("name"))
-            .or_else(|| v.get("toolCall").and_then(|tc| tc.get("name")))
+    // Claude Code 也会收到 Cursor 兼容 payload（带 cursor_version），此时不该再发一次事件。
+    if agent == "claude-code"
+        && parsed
+            .as_ref()
+            .is_some_and(|value| value.get("cursor_version").is_some())
+    {
+        hook_output(agent, kind);
+        return;
+    }
+
+    let tool = parsed.as_ref().and_then(|value| {
+        value
+            .get("tool_name")
+            .or_else(|| value.get("toolName"))
+            .or_else(|| value.get("tool"))
+            .or_else(|| value.get("name"))
+            .or_else(|| value.get("toolCall").and_then(|call| call.get("name")))
             .and_then(Value::as_str)
+            .filter(|name| !name.is_empty())
             .map(String::from)
     });
 
-    let tool_input = parsed.as_ref().and_then(|v| {
-        v.get("tool_input")
-            .or_else(|| v.get("toolInput"))
-            .or_else(|| v.get("input"))
-            .or_else(|| v.get("arguments"))
-            .or_else(|| v.get("toolCall").and_then(|tc| tc.get("args")))
-            .cloned()
+    // 与 shell helper 保持一致：只把第一个命中的字段转成 `{输出字段: 值}`，
+    // 原始 tool 名不做映射，状态判定统一交给 runtime_state。
+    let tool_input = parsed
+        .as_ref()
+        .and_then(|value| {
+            value
+                .get("tool_input")
+                .or_else(|| value.get("toolInput"))
+                .or_else(|| value.get("input"))
+                .or_else(|| value.get("arguments"))
+                .or_else(|| value.get("toolCall").and_then(|call| call.get("args")))
+        })
+        .and_then(map_tool_input);
+
+    // 会话 id 各 agent 命名不一致：Claude Code / WorkBuddy 用 session_id，
+    // Cursor 用 sessionId，部分版本嵌在 session.id 里。多会话时宠物靠它区分。
+    let session_id = parsed.as_ref().and_then(|value| {
+        value
+            .get("session_id")
+            .or_else(|| value.get("sessionId"))
+            .or_else(|| value.get("conversation_id"))
+            .or_else(|| value.get("conversationId"))
+            .or_else(|| value.get("session").and_then(|s| s.get("id")))
+            .and_then(Value::as_str)
+            .filter(|id| !id.is_empty())
+            .map(String::from)
     });
 
-    let mut mapped_kind = kind.to_string();
-    let mut mapped_tool = tool_name.clone();
+    let _ = send_event(
+        agent,
+        kind,
+        tool.as_deref(),
+        tool_input.as_ref(),
+        session_id.as_deref(),
+    );
 
-    if let Some(ref t) = tool_name {
-        match t.as_str() {
-            "view_file"
-            | "read_url_content"
-            | "search_web"
-            | "list_resources"
-            | "read_resource"
-            | "view_image"
-            | "list_mcp_resources"
-            | "list_mcp_resource_templates"
-            | "read_mcp_resource" => {
-                mapped_tool = Some("read".to_string());
-            }
-            "replace_file_content" | "write_to_file" | "run_command" | "invoke_subagent" => {
-                mapped_tool = Some("edit".to_string());
-            }
-            "ask_question" | "request_user_input" => {
-                mapped_kind = "permission.waiting".to_string();
-            }
-            _ => {}
-        }
-    }
+    hook_output(agent, kind);
+}
 
-    let _ = send_event(agent, &mapped_kind, mapped_tool.as_deref(), tool_input.as_ref());
-
+fn hook_output(agent: &str, kind: &str) {
     if agent == "antigravity" && (kind == "tool.before" || kind == "session.stop") {
         println!(r#"{{"decision":"allow"}}"#);
     } else if agent == "cursor" && kind == "user.prompt" {
@@ -79,14 +102,67 @@ fn main() {
     }
 }
 
+/// 与 shell helper 的字段映射表保持一致（源字段 -> 输出字段，按优先级排列）。
+const TOOL_INPUT_FIELDS: &[(&str, &str)] = &[
+    ("file_path", "file_path"),
+    ("filePath", "filePath"),
+    ("file", "file"),
+    ("path", "path"),
+    ("command", "command"),
+    ("CommandLine", "command"),
+    ("pattern", "pattern"),
+    ("url", "url"),
+    ("description", "description"),
+    ("subject", "subject"),
+    ("prompt", "subject"),
+    ("message", "subject"),
+    ("error", "subject"),
+    ("initialPrompt", "subject"),
+    ("AbsolutePath", "filePath"),
+    ("TargetFile", "filePath"),
+    ("DirectoryPath", "path"),
+    ("SearchDirectory", "path"),
+    ("SearchPath", "path"),
+    ("Cwd", "path"),
+    ("Query", "pattern"),
+    ("query", "pattern"),
+    ("Pattern", "pattern"),
+    ("Url", "url"),
+    ("Description", "subject"),
+    ("Instruction", "subject"),
+    ("Prompt", "subject"),
+    ("Input", "subject"),
+    ("Message", "subject"),
+    ("Reason", "subject"),
+    ("Action", "subject"),
+    ("Target", "subject"),
+    ("ImageName", "subject"),
+];
+
+fn map_tool_input(value: &Value) -> Option<Value> {
+    let object = value.as_object()?;
+    for (source, target) in TOOL_INPUT_FIELDS {
+        if let Some(text) = object.get(*source).and_then(Value::as_str) {
+            if !text.is_empty() {
+                return Some(json!({ *target: text }));
+            }
+        }
+    }
+    None
+}
+
 fn send_event(
     agent: &str,
     kind: &str,
     tool: Option<&str>,
     tool_input: Option<&Value>,
+    session_id: Option<&str>,
 ) -> Result<(), ()> {
-    let home = dirs::home_dir().ok_or(())?;
-    let runtime_dir = home.join(".copet").join("runtime");
+    let runtime_dir = std::env::var_os("COPET_RUNTIME_DIR")
+        .map(std::path::PathBuf::from)
+        .filter(|path| !path.as_os_str().is_empty())
+        .or_else(|| dirs::home_dir().map(|home| home.join(".copet").join("runtime")))
+        .ok_or(())?;
     let endpoint = fs::read_to_string(runtime_dir.join("event-endpoint")).map_err(|_| ())?;
     let token = fs::read_to_string(runtime_dir.join("event-token")).map_err(|_| ())?;
 
@@ -114,6 +190,9 @@ fn send_event(
     }
     if let Some(ti) = tool_input {
         body["toolInput"] = ti.clone();
+    }
+    if let Some(id) = session_id {
+        body["sessionId"] = json!(id);
     }
     let payload = serde_json::to_string(&body).map_err(|_| ())?;
 

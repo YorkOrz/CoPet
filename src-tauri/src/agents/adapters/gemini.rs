@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use super::super::{
     install_json_hooks, json_config_has_copet_hooks, remove_json_hooks, AdapterError, AgentManager,
-    CliAdapter, HookEvent,
+    CliAdapter, HookEvent, HookShell,
 };
 
 pub(super) static ADAPTER: GeminiAdapter = GeminiAdapter;
@@ -66,6 +66,7 @@ impl CliAdapter for GeminiAdapter {
             &self.config_path(manager.home()),
             EVENTS,
             1000,
+            HookShell::Cmd,
         )
     }
 
