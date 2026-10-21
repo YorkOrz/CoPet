@@ -567,12 +567,17 @@ fn is_copet_command(command: &str, adapter_id: &str) -> bool {
 fn hook_command(adapter_id: &str, helper_path: &Path, kind: &str) -> String {
     #[cfg(windows)]
     {
-		let path = helper_path.to_string_lossy();
-		if path.contains(' ') {
-			format!("\"{path}\" {adapter_id} {kind}")
-		} else {
-			format!("{path} {adapter_id} {kind}")
-		}
+        // Agent CLIs on Windows run hook commands through a POSIX shell (Git
+        // Bash). A backslash-separated path is parsed as escape sequences
+        // there, collapsing `C:\Users\...` into `C:Users...` and failing with
+        // "command not found". Forward slashes are accepted both by MSYS
+        // shells and by CreateProcess, so emit them.
+        let path = helper_path.to_string_lossy().replace('\\', "/");
+        if path.contains(' ') {
+            format!("\"{path}\" {adapter_id} {kind}")
+        } else {
+            format!("{path} {adapter_id} {kind}")
+        }
     }
     #[cfg(not(windows))]
     {

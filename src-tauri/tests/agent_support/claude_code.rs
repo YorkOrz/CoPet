@@ -1,4 +1,4 @@
-use super::helpers::manager_with_fake_agents;
+use super::helpers::{manager_with_fake_agents, read_json};
 use std::{
     fs,
     io::{Read, Write},
@@ -36,6 +36,30 @@ fn claude_install_merges_hooks_and_uninstall_preserves_user_hooks() {
     assert!(uninstalled.contains("echo user"));
     assert!(!uninstalled.contains("copet-hook.sh"));
     assert!(!root.join("adapters/claude-code.json").exists());
+}
+
+#[test]
+fn claude_install_writes_shell_safe_hook_command() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path().join("home");
+    let root = temp.path().join(".copet");
+    let manager = manager_with_fake_agents(&root, &home);
+
+    manager.install("claude-code").unwrap();
+    let settings = read_json(home.join(".claude/settings.json"));
+    let command = settings["hooks"]["PreToolUse"][0]["hooks"][0]["command"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    assert!(command.contains("copet-hook"));
+    assert!(command.contains("claude-code tool.before"));
+    // Claude Code runs hook commands through Git Bash on Windows, where a
+    // backslash-separated executable path collapses into an invalid command.
+    assert!(
+        !command.contains('\\'),
+        "hook command must not contain backslashes: {command}"
+    );
 }
 
 #[test]
