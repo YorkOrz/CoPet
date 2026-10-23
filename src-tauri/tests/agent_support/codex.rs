@@ -29,6 +29,52 @@ fn codex_install_writes_hooks_json_and_enables_hooks_feature() {
     assert!(hooks.contains("tool.before"));
     assert!(config.contains("[features]"));
     assert!(config.contains("hooks = true"));
+
+    let hooks_json: serde_json::Value = serde_json::from_str(&hooks).unwrap();
+    assert_eq!(
+        hooks_json["hooks"]["PreToolUse"][0]["hooks"][0]["timeout"], 5,
+        "Codex hooks must outlive the Windows stdin EOF wait"
+    );
+}
+
+#[test]
+fn codex_install_removes_legacy_posix_hook_entries() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path().join("home");
+    let root = temp.path().join(".copet");
+    let hooks_path = home_path(&home, ".codex/hooks.json");
+    fs::create_dir_all(hooks_path.parent().unwrap()).unwrap();
+    fs::write(
+        &hooks_path,
+        r#"{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "if [ -f '/old/copet-hook.sh' ]; then '/old/copet-hook.sh' codex tool.before; else echo \"{}\"; fi",
+            "statusMessage": "Updating CoPet",
+            "timeout": 1,
+            "type": "command"
+          }
+        ],
+        "matcher": "*"
+      }
+    ]
+  }
+}"#,
+    )
+    .unwrap();
+    let manager = manager_with_fake_agents(&root, &home);
+
+    manager.install("codex").unwrap();
+
+    let hooks = fs::read_to_string(&hooks_path).unwrap();
+    let hooks_json: serde_json::Value = serde_json::from_str(&hooks).unwrap();
+    let groups = hooks_json["hooks"]["PreToolUse"].as_array().unwrap();
+    assert_eq!(groups.len(), 1, "legacy hook should be replaced: {hooks}");
+    assert!(!hooks.contains("copet-hook.sh"));
+    assert_eq!(groups[0]["hooks"][0]["timeout"], 5);
 }
 
 #[test]

@@ -596,7 +596,10 @@ pub fn command_invokes_copet_helper(command: &str, adapter_id: &str, kind: Optio
 fn copet_helper_invocation(command: &str, adapter_id: &str, kind: Option<&str>) -> Option<String> {
     let tokens = tokenize_command(command);
     tokens.iter().enumerate().find_map(|(index, token)| {
-        if helper_file_name(token) != Some(HELPER_NAME) {
+        let Some(name) = helper_file_name(token) else {
+            return None;
+        };
+        if name != "copet-hook.exe" && name != "copet-hook.sh" {
             return None;
         }
         if tokens.get(index + 1).map(String::as_str) != Some(adapter_id) {

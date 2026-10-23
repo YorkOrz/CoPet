@@ -71,9 +71,11 @@ impl CliAdapter for CodexCliAdapter {
 
     fn install(&self, manager: &AgentManager) -> Result<(), AdapterError> {
         let hooks_path = self.config_path(manager.home());
-        install_json_hooks(manager, self.id(), &hooks_path, EVENTS, 1, HookShell::Cmd)?;
+        // Windows 上 helper 等 stdin EOF 与冷启动约 1.5s；Codex 的 1s 超时会先杀掉钩子。
+        install_json_hooks(manager, self.id(), &hooks_path, EVENTS, 5, HookShell::Cmd)?;
         update_codex_config_toml(manager.home(), |document, config_path| {
             set_features_hooks_true(document, config_path)?;
+            remove_copet_trusted_hashes(document, &hooks_path);
             apply_trusted_hashes(document, &hooks_path, config_path)
         })
     }
