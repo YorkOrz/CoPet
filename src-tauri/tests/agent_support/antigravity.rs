@@ -44,7 +44,11 @@ fn antigravity_install_writes_global_hooks_entry() {
         .as_str()
         .unwrap()
         .contains("antigravity tool.after"));
-    assert!(copet["PostInvocation"][0]["command"]
+    assert_eq!(copet["PreToolUse"][0]["hooks"][0]["timeout"], 5);
+    assert_eq!(copet["PostToolUse"][0]["hooks"][0]["timeout"], 5);
+    assert_eq!(copet["PreInvocation"][0]["timeout"], 5);
+    assert_eq!(copet["Stop"][0]["timeout"], 5);
+    assert!(copet["PreInvocation"][0]["command"]
         .as_str()
         .unwrap()
         .contains("antigravity user.prompt"));
@@ -175,7 +179,7 @@ fn antigravity_marker_from_unrelated_adapter_is_not_current_install() {
         "timeout": 1
       }]
     }],
-    "PostInvocation": [{
+    "PreInvocation": [{
       "type": "command",
       "command": "# copet-managed-hook\nif [ -f '/tmp/copet-hook.sh' ]; then '/tmp/copet-hook.sh' codex user.prompt; else echo \"{}\"; fi",
       "timeout": 1
@@ -222,7 +226,7 @@ fn antigravity_marker_with_stale_kind_is_not_current_install() {
         "timeout": 1
       }]
     }],
-    "PostInvocation": [{
+    "PreInvocation": [{
       "type": "command",
       "command": "# copet-managed-hook\nif [ -f '/tmp/copet-hook.sh' ]; then '/tmp/copet-hook.sh' antigravity user.prompt; else echo \"{}\"; fi",
       "timeout": 1
@@ -269,7 +273,7 @@ fn antigravity_marker_comment_and_prefix_kind_are_not_current_install() {
         "timeout": 1
       }]
     }],
-    "PostInvocation": [{
+    "PreInvocation": [{
       "type": "command",
       "command": "if [ -f '/tmp/copet-hook.sh' ]; then '/tmp/copet-hook.sh' antigravity user.prompt; else echo \"{}\"; fi",
       "timeout": 1
@@ -316,7 +320,7 @@ fn antigravity_helper_comment_does_not_mask_prefix_kind_invocation() {
         "timeout": 1
       }]
     }],
-    "PostInvocation": [{
+    "PreInvocation": [{
       "type": "command",
       "command": "if [ -f '/tmp/copet-hook.sh' ]; then '/tmp/copet-hook.sh' antigravity user.prompt; else echo \"{}\"; fi",
       "timeout": 1
@@ -363,7 +367,7 @@ fn antigravity_helper_comment_does_not_mask_other_invocation() {
         "timeout": 1
       }]
     }],
-    "PostInvocation": [{
+    "PreInvocation": [{
       "type": "command",
       "command": "if [ -f '/tmp/copet-hook.sh' ]; then '/tmp/copet-hook.sh' antigravity user.prompt; else echo \"{}\"; fi",
       "timeout": 1
@@ -410,7 +414,7 @@ fn antigravity_helper_name_must_match_exactly() {
         "timeout": 1
       }]
     }],
-    "PostInvocation": [{
+    "PreInvocation": [{
       "type": "command",
       "command": "if [ -f '/tmp/copet-hook.sh' ]; then '/tmp/copet-hook.sh' antigravity user.prompt; else echo \"{}\"; fi",
       "timeout": 1

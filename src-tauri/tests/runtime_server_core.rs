@@ -408,7 +408,7 @@ fn runtime_core_updates_existing_message_for_stop_after_agent_activity() {
 }
 
 #[test]
-fn runtime_core_suppresses_antigravity_stop_after_prompt_when_cli_never_started() {
+fn runtime_core_handles_antigravity_stop_after_prompt() {
     let mut core = RuntimeCore::new("secret".to_string());
 
     core.handle_event(
@@ -445,9 +445,9 @@ fn runtime_core_suppresses_antigravity_stop_after_prompt_when_cli_never_started(
         .find(|message| message.agent == "antigravity")
         .unwrap();
 
-    assert_eq!(message.text, "Thinking: git commit");
-    assert_eq!(message.updated_at_ms, 100);
-    assert_eq!(status.current_state.state, PetStateId::Jumping);
+    assert_eq!(message.text, "Done.");
+    assert_eq!(message.updated_at_ms, 200);
+    assert_eq!(status.current_state.state, PetStateId::Waving);
 }
 
 #[test]

@@ -29,7 +29,7 @@ const EVENTS: &[AntigravityEvent] = &[
         kind: "tool.after",
     },
     AntigravityEvent {
-        cli_event: "PostInvocation",
+        cli_event: "PreInvocation",
         matcher: None,
         kind: "user.prompt",
     },
@@ -114,7 +114,7 @@ fn antigravity_hook_entry(adapter_id: &str, helper_path: &Path) -> Value {
         let handler = json!({
             "type": "command",
             "command": command,
-            "timeout": 1
+            "timeout": 5
         });
 
         let value = if let Some(matcher) = event.matcher {

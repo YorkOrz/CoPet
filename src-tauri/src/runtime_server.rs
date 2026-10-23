@@ -487,10 +487,6 @@ fn is_agent_activity_start_kind(kind: &str) -> bool {
 }
 
 fn is_agent_activity_start_event(event: &RuntimeEvent) -> bool {
-    if event.agent == "antigravity" && event.kind == "user.prompt" {
-        return false;
-    }
-
     is_agent_activity_start_kind(&event.kind)
 }
 
