@@ -668,12 +668,28 @@ pub(crate) enum HookShell {
     Cmd,
     /// 无论什么平台都用 POSIX 语法，并要求路径为正斜杠。
     Posix,
+    /// Windows 上按 PowerShell 语法生成，其它平台按 POSIX 语法。
+    ///
+    /// Codex 在 Windows 上用 PowerShell 执行 hook：cmd 语法的 `if exist "P" (...)`
+    /// 会被解析成 `Missing '(' after 'if' in if statement.`，hook 静默失败，
+    /// 于是宠物永远停在 `Thinking...`。
+    PowerShell,
 }
 
 fn hook_command(adapter_id: &str, helper_path: &Path, kind: &str, shell: HookShell) -> String {
     let fallback_output = hook_default_output(adapter_id, kind);
     if shell == HookShell::Posix {
         return posix_hook_command(adapter_id, helper_path, kind, fallback_output);
+    }
+    if shell == HookShell::PowerShell {
+        #[cfg(windows)]
+        {
+            return powershell_hook_command(adapter_id, helper_path, kind, fallback_output);
+        }
+        #[cfg(not(windows))]
+        {
+            return posix_hook_command(adapter_id, helper_path, kind, fallback_output);
+        }
     }
     #[cfg(windows)]
     {
@@ -718,6 +734,44 @@ fn posix_hook_command(
             "if [ -f {path} ]; then {path} {adapter_id} {kind}; else printf '%s\\n' {fallback}; fi"
         )
     }
+}
+
+/// PowerShell 版 hook 命令。
+///
+/// Codex 在 Windows 上用 PowerShell 执行 hook，所以这里必须生成 PowerShell 语法：
+/// - `if (Test-Path "P") { & "P" <id> <kind> } else { "{}" }`
+/// - `&` 是 PowerShell 调用外部程序的调用运算符，不能省略。
+/// - helper 缺失时必须返回约定输出，否则 hook 的 stdout 为空。
+fn powershell_hook_command(
+    adapter_id: &str,
+    helper_path: &Path,
+    kind: &str,
+    fallback_output: &str,
+) -> String {
+    let path = powershell_quote(&helper_path.to_string_lossy());
+    if fallback_output == "{}" {
+        format!("if (Test-Path {path}) {{ & {path} {adapter_id} {kind} }} else {{ \"{{}}\" }}")
+    } else {
+        let fallback = powershell_quote(fallback_output);
+        format!("if (Test-Path {path}) {{ & {path} {adapter_id} {kind} }} else {{ {fallback} }}")
+    }
+}
+
+/// PowerShell 双引号字符串里的转义：`"` 用反引号前缀，`$` 用反引号前缀，
+/// 反引号本身写成两个反引号。
+fn powershell_quote(value: &str) -> String {
+    let mut escaped = String::with_capacity(value.len() + 2);
+    escaped.push('"');
+    for ch in value.chars() {
+        match ch {
+            '`' => escaped.push_str("``"),
+            '"' => escaped.push_str("`\""),
+            '$' => escaped.push('`'),
+            _ => escaped.push(ch),
+        }
+    }
+    escaped.push('"');
+    escaped
 }
 
 fn helper_script() -> &'static str {

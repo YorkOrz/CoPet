@@ -97,3 +97,46 @@ fn helper_name_must_match_exactly() {
         Some("user.prompt")
     ));
 }
+
+/// Codex 在 Windows 上用 PowerShell 执行 hook，所以安装出来的命令必须是
+/// PowerShell 语法。cmd 语法（`if exist "P" (...)`）在 PowerShell 里是
+/// `Missing '(' after 'if' in if statement.`，hook 静默失败，宠物就永远停在
+/// `Thinking...`。这条用例守住匹配器能认出 PowerShell 写法。
+#[test]
+fn powershell_hook_command_matches_only_its_own_adapter_and_kind() {
+    let helper = windows_helper();
+    let command = format!(
+        "if (Test-Path \"{helper}\") {{ & \"{helper}\" codex tool.before }} else {{ \"{{}}\" }}"
+    );
+
+    assert!(command_invokes_copet_helper(
+        &command,
+        "codex",
+        Some("tool.before")
+    ));
+    assert!(!command_invokes_copet_helper(
+        &command,
+        "codex",
+        Some("tool.after")
+    ));
+    assert!(!command_invokes_copet_helper(
+        &command,
+        "antigravity",
+        Some("tool.before")
+    ));
+    assert!(command_invokes_copet_helper(&command, "codex", None));
+}
+
+/// 兜底分支 `"{}"` 里不含 helper 名，不能被误判成一次 helper 调用。
+#[test]
+fn powershell_fallback_branch_is_not_a_helper_invocation() {
+    let helper = windows_helper();
+    let command = format!("if (Test-Path \"{helper}\") {{ \"{{}}\" }} else {{ \"{{}}\" }}");
+
+    assert!(!command_invokes_copet_helper(
+        &command,
+        "codex",
+        Some("tool.before")
+    ));
+    assert!(!command_invokes_copet_helper(&command, "codex", None));
+}

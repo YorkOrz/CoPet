@@ -72,7 +72,22 @@ impl CliAdapter for CodexCliAdapter {
     fn install(&self, manager: &AgentManager) -> Result<(), AdapterError> {
         let hooks_path = self.config_path(manager.home());
         // Windows 上 helper 等 stdin EOF 与冷启动约 1.5s；Codex 的 1s 超时会先杀掉钩子。
-        install_json_hooks(manager, self.id(), &hooks_path, EVENTS, 5, HookShell::Cmd)?;
+        //
+        // Codex 在 Windows 上用 PowerShell 执行 hook，所以命令必须写成 PowerShell 语法；
+        // 写成 cmd 语法会被解析成 `Missing '(' after 'if' in if statement.`，
+        // 导致 PreToolUse / PostToolUse 等 hook 全部静默失败。
+        //
+        // 只写 `command`、不写 `commandWindows`：Codex 计算 trust hash 时用的是
+        // Windows 上生效的那条命令，填 `commandWindows` 会让 hash 对不上而被标为
+        // `modified`，hook 同样不启动。
+        install_json_hooks(
+            manager,
+            self.id(),
+            &hooks_path,
+            EVENTS,
+            5,
+            HookShell::PowerShell,
+        )?;
         update_codex_config_toml(manager.home(), |document, config_path| {
             set_features_hooks_true(document, config_path)?;
             remove_copet_trusted_hashes(document, &hooks_path);

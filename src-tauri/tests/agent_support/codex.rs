@@ -652,3 +652,55 @@ fn codex_trusted_hash_matches_golden_for_pinned_fixture() {
     // Cleanup
     let _ = std::fs::remove_dir_all(&base);
 }
+
+#[test]
+#[cfg(windows)]
+fn codex_install_writes_powershell_hook_commands_on_windows() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path().join("home");
+    let root = temp.path().join(".copet");
+    let manager = manager_with_fake_agents(&root, &home);
+
+    manager.install("codex").unwrap();
+
+    let hooks = fs::read_to_string(home_path(&home, ".codex/hooks.json")).unwrap();
+    let hooks_json: serde_json::Value = serde_json::from_str(&hooks).unwrap();
+
+    // Codex 在 Windows 上用 PowerShell 执行 hook：cmd 语法会解析失败并静默跳过，
+    // 于是 PreToolUse / PostToolUse / Stop 全部丢失，宠物永远停在 `Thinking...`。
+    assert!(
+        hooks.contains("Test-Path"),
+        "Windows hook command must use PowerShell syntax: {hooks}"
+    );
+    assert!(
+        !hooks.contains("if exist"),
+        "cmd syntax never fires under Codex's PowerShell runner: {hooks}"
+    );
+    assert!(
+        !hooks.contains("commandWindows"),
+        "commandWindows makes Codex's trust hash mismatch: {hooks}"
+    );
+
+    for (event, kind) in [
+        ("UserPromptSubmit", "user.prompt"),
+        ("PreToolUse", "tool.before"),
+        ("PostToolUse", "tool.after"),
+        ("PermissionRequest", "permission.waiting"),
+        ("Stop", "session.stop"),
+    ] {
+        let groups = hooks_json["hooks"][event].as_array().unwrap();
+        let command = groups[0]["hooks"][0]["command"].as_str().unwrap();
+        assert!(
+            command.contains(&format!("codex {kind}")),
+            "{event} must invoke the codex helper with kind {kind}: {command}"
+        );
+        assert!(
+            command.contains("& \""),
+            "{event} must use the PowerShell call operator: {command}"
+        );
+        assert!(
+            command.contains("else { \"{}\" }"),
+            "{event} must fall back to {{}} when the helper is missing: {command}"
+        );
+    }
+}
